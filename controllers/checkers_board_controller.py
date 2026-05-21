@@ -68,7 +68,7 @@ class CheckersBoardController(CommonBoardController):
                         txt_to_write = "Move of player " + str(current_player) \
                                        + ": from " + str(bot_move[0]) + " to " + str(bot_move[1])
                         if self.controller.should_log_the_game:
-                            print txt_to_write
+                            print(txt_to_write)
                         if self.controller.should_log_the_game_on_board:
                             self.controller.write_to_console(txt_to_write)
 
@@ -136,17 +136,17 @@ class CheckersBoardController(CommonBoardController):
             if not self.the_end:
                 if self.model.is_game_over:
                     if self.should_log_the_game:
-                        print "Game over!"
+                        print("Game over!")
                     if self.should_log_the_game_on_board:
                         self.write_to_console("Game over!")
                     if self.model.winner == 0:
                         if self.should_log_the_game:
-                            print "Standoff..."
+                            print("Standoff...")
                         if self.should_log_the_game_on_board:
                             self.write_to_console("Standoff...")
                     else:
                         if self.should_log_the_game:
-                            print "The winner is player " + str(self.model.winner)
+                            print("The winner is player " + str(self.model.winner))
                         if self.should_log_the_game_on_board:
                             self.write_to_console("The winner is player " + str(self.model.winner))
                     self.the_end = True
@@ -164,17 +164,17 @@ class CheckersBoardController(CommonBoardController):
                     self.controller.perform_bot_move()
                     if self.controller.model.is_game_over:
                         if self.controller.should_log_the_game:
-                            print "Game over!"
+                            print("Game over!")
                         if self.controller.should_log_the_game_on_board:
                             self.controller.write_to_console("Game over!")
                         if self.controller.model.winner == 0:
                             if self.controller.should_log_the_game:
-                                print "Standoff..."
+                                print("Standoff...")
                             if self.controller.should_log_the_game_on_board:
                                 self.controller.write_to_console("Standoff...")
                         else:
                             if self.controller.should_log_the_game:
-                                print "The winner is player " + str(self.controller.model.winner)
+                                print("The winner is player " + str(self.controller.model.winner))
                             if self.controller.should_log_the_game_on_board:
                                 self.controller.write_to_console("The winner is player " + str(self.controller.model.winner))
                         self.controller.the_end = True

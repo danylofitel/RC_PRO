@@ -69,7 +69,7 @@ class ReversiBoardController(CommonBoardController):
                     elif self.game_mode == GAME_MODES["playerVSPro"]:
                         if self.model.get_winner() == self.computer:
                             self.write_to_console("Computer has won with score " + score)
-                            self.write_to_console("I'm the best here!!! Keep trying, looser!")
+                            self.write_to_console("I'm the best here!!! Keep trying, loser!")
                         else:
                             self.write_to_console("Player has won with score " + score)
                             self.write_to_console("Okay, okay, this time you win!")

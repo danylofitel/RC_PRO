@@ -1,5 +1,5 @@
 import math
-from model import GameModel, BOARD_SIZE
+from model.model import GameModel, BOARD_SIZE
 
 __author__ = 'vladvalt'
 

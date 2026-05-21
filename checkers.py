@@ -1,4 +1,4 @@
-from Tkinter import Tk
+from tkinter import Tk
 import time
 import sys
 from ai.checkers_bot import CheckersBot

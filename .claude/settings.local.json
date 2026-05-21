@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir /B)",
+      "PowerShell(py -3 --version)",
+      "PowerShell(python --version)",
+      "PowerShell(py -3 -m venv .venv)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pip install --upgrade pip)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pip install -r requirements.txt)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe reversi.py)",
+      "PowerShell(Get-Process python -ErrorAction SilentlyContinue)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -c \"import ai.checkers_bot, controllers.checkers_board_controller, model.checkers_model; print\\('imports OK'\\)\")",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe checkers.py)"
+    ]
+  }
+}
