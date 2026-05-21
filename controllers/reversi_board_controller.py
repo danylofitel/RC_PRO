@@ -9,6 +9,8 @@ FILLER_MAP = {0: None,
               3: "reversi_available_move_black",
               4: "reversi_available_move_white"}
 
+BOT_MOVE_DELAY_MS = 500
+
 
 class ReversiBoardController(CommonBoardController):
     def __init__(self, model, mode, player_moves_first):
@@ -46,34 +48,61 @@ class ReversiBoardController(CommonBoardController):
 
         if self.game_mode == GAME_MODES["playerVSPlayer"]:
             self.move_human(x, y)
+            self._check_game_over()
         elif self.game_mode == GAME_MODES["playerVSPro"]:
-            if self.model.get_current_player() == self.computer:
-                self.move_computer()
-            else:
+            if self.model.get_current_player() != self.computer:
                 self.move_human(x, y)
+                self._after_move()
 
-        if not self.game_finished:
-            if self.model.is_over():
-                self.write_to_console("Game over!!!")
-                if self.model.get_winner() == 0:
-                    self.write_to_console("Draw...")
+    def _do_computer_move(self):
+        if self.game_finished or self.model.is_over():
+            return
+        self.move_computer()
+        self._after_move()
+
+    def _after_move(self):
+        # Game-over check first; once over, no further moves should be scheduled.
+        if self._check_game_over():
+            return
+        if self.game_mode != GAME_MODES["playerVSPro"]:
+            return
+        # If it's the human's turn but their only option is to pass, do it for them.
+        # Without this, the UI sits idle with no highlighted moves and the player
+        # has to click a random cell to trigger move_human's pass branch.
+        if (self.model.get_current_player() != self.computer
+                and self.model.get_available_moves() == [self.model.engine.pass_move]):
+            self.write_to_console("Player passes (no valid moves)")
+            self.model.move_human(self.model.engine.pass_move[0], self.model.engine.pass_move[1])
+            self.fill_board()
+            if self._check_game_over():
+                return
+        if self.model.get_current_player() == self.computer:
+            self.board.parent.after(BOT_MOVE_DELAY_MS, self._do_computer_move)
+
+    def _check_game_over(self):
+        if self.game_finished or not self.model.is_over():
+            return False
+        self.write_to_console("Game over!!!")
+        if self.model.get_winner() == 0:
+            self.write_to_console("Draw...")
+        else:
+            winner = self.model.get_winner()
+            loser = self.model.engine.get_opponent(winner)
+            score_winner = self.model.engine.get_score(winner)
+            score_loser = self.model.engine.get_score(loser)
+            score = str(score_winner) + ":" + str(score_loser)
+
+            if self.game_mode == GAME_MODES["playerVSPlayer"]:
+                self.write_to_console("Player " + str(winner) + " has won with score " + score)
+            elif self.game_mode == GAME_MODES["playerVSPro"]:
+                if self.model.get_winner() == self.computer:
+                    self.write_to_console("Computer has won with score " + score)
+                    self.write_to_console("I'm the best here!!! Keep trying, loser!")
                 else:
-                    winner = self.model.get_winner()
-                    loser = self.model.engine.get_opponent(winner)
-                    score_winner = self.model.engine.get_score(winner)
-                    score_loser = self.model.engine.get_score(loser)
-                    score = str(score_winner) + ":" + str(score_loser)
-
-                    if self.game_mode == GAME_MODES["playerVSPlayer"]:
-                        self.write_to_console("Player " + str(winner) + " has won with score " + score)
-                    elif self.game_mode == GAME_MODES["playerVSPro"]:
-                        if self.model.get_winner() == self.computer:
-                            self.write_to_console("Computer has won with score " + score)
-                            self.write_to_console("I'm the best here!!! Keep trying, loser!")
-                        else:
-                            self.write_to_console("Player has won with score " + score)
-                            self.write_to_console("Okay, okay, this time you win!")
-                self.game_finished = True
+                    self.write_to_console("Player has won with score " + score)
+                    self.write_to_console("Okay, okay, this time you win!")
+        self.game_finished = True
+        return True
 
     def move_human(self, x, y):
         if not self.model.is_over():
