@@ -1,12 +1,11 @@
-__author__ = 'danylo'
+__author__ = "danylofitel"
 
 BOARD_SIZE = 64
 
 
 class GameModel:
-
     def create_board(self):
-        #TODO remove it later
+        # TODO remove it later
         board_position = [0 for i in range(BOARD_SIZE)]
         board_position[28] = 1
         board_position[27] = 1

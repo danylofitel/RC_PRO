@@ -1,23 +1,22 @@
 from tkinter import Tk
 import time
-import sys
 from ai.checkers_bot import CheckersBot
 from controllers.checkers_board_controller import CheckersBoardController
 from controllers.common_board_controller import GAME_MODES
 from model.checkers_model import CheckersGameModel
 from ui.board_common import BoardCommonUI
 
-__author__ = 'vladvalt'
+__author__ = "vladvalt"
 
 ##The place to start checkers
 
 
 def checkers(game_bot, player_moves_first=True):
-    #Reserve it for demo usage
-    #total = len(sys.argv)
-    #cmd_args = str(sys.argv)
-    #print ("The total numbers of args passed to the script: %d " % total)
-    #print ("Args list: %s " % cmd_args)
+    # Reserve it for demo usage
+    # total = len(sys.argv)
+    # cmd_args = str(sys.argv)
+    # print ("The total numbers of args passed to the script: %d " % total)
+    # print ("Args list: %s " % cmd_args)
 
     root = Tk()
     model = CheckersGameModel()
@@ -57,8 +56,9 @@ def improve_skill(bot, number_of_games):
         print()
         print()
 
+
 bot = CheckersBot(None)
-#improve_skill(bot, 2)
+# improve_skill(bot, 2)
 # White moves first in Checkers. Set player_moves_first=False to play as Black
 # and let the bot play White.
 checkers(bot, player_moves_first=True)

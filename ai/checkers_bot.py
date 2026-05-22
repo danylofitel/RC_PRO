@@ -1,10 +1,9 @@
 import random
 
-__author__ = 'vladvalt'
+__author__ = "vladvalt"
 
 
 class CheckersBot:
-
     def __init__(self, model):
         self.model = model
         self.player = 2
@@ -39,6 +38,8 @@ class CheckersBot:
                     if self.model.is_able_to_move(i, j):
                         moves = model.get_available_moves(i, j)
                         if not moves is None and len(moves) > 0:
-                            available_moves.append(((i, j), model.get_available_moves(i, j)))
-        #print available_moves
+                            available_moves.append(
+                                ((i, j), model.get_available_moves(i, j))
+                            )
+        # print available_moves
         return available_moves

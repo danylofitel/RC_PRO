@@ -4,13 +4,13 @@ from random import randrange
 
 
 # Search bounds (treated as +/- infinity for negamax).
-INT_MAX = 10 ** 12
+INT_MAX = 10**12
 INT_MIN = -INT_MAX
 
 # Heuristic weights.
 MOBILITY_BONUS = 100
-CORNER_CELL_BONUS = 10_000          # 100 * MOBILITY_BONUS
-STABILITY_BONUS = 5_000             # CORNER_CELL_BONUS // 2
+CORNER_CELL_BONUS = 10_000  # 100 * MOBILITY_BONUS
+STABILITY_BONUS = 5_000  # CORNER_CELL_BONUS // 2
 VICTORY_BONUS = INT_MAX // 4
 
 # When True, get_best_move prints the chosen value and search depth.
@@ -25,9 +25,7 @@ class ReversiEngine(object):
     second = 2
 
     # All eight (dx, dy) directions from a cell.
-    directions = ((-1, -1), (-1, 0), (-1, 1),
-                  (0, -1),           (0, 1),
-                  (1, -1),  (1, 0),  (1, 1))
+    directions = ((-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1))
 
     # Orthogonal directions from a corner along its two adjacent edges.
     edge_directions = ((-1, 0), (0, -1), (0, 1), (1, 0))
@@ -37,9 +35,11 @@ class ReversiEngine(object):
 
     def __init__(self, board_size):
         self.size = board_size
-        self.cells_count = board_size ** 2
+        self.cells_count = board_size**2
 
-        self.board = [[self.empty for _ in range(board_size)] for _ in range(board_size)]
+        self.board = [
+            [self.empty for _ in range(board_size)] for _ in range(board_size)
+        ]
 
         # Standard Reversi starting position.
         mid = board_size // 2
@@ -56,10 +56,12 @@ class ReversiEngine(object):
         self._corners = ((0, 0), (0, m), (m, 0), (m, m))
 
         # Free cells maintained incrementally by move()/undo_move().
-        self._free_cells = {(x, y)
-                            for x in range(board_size)
-                            for y in range(board_size)
-                            if self.board[x][y] == self.empty}
+        self._free_cells = {
+            (x, y)
+            for x in range(board_size)
+            for y in range(board_size)
+            if self.board[x][y] == self.empty
+        }
 
         # Optional history of moves for callers that want undo without tracking
         # flipped_cells themselves. Populated only when move() is called with
@@ -68,8 +70,12 @@ class ReversiEngine(object):
 
     def __repr__(self):
         header = "  " + " ".join(str(y) for y in range(self.size))
-        rows = ["{0}|{1}|".format(x, " ".join(str(self.board[x][y]) for y in range(self.size)))
-                for x in range(self.size)]
+        rows = [
+            "{0}|{1}|".format(
+                x, " ".join(str(self.board[x][y]) for y in range(self.size))
+            )
+            for x in range(self.size)
+        ]
         return header + "\n" + "\n".join(rows) + "\n"
 
     # -------- game state queries --------
@@ -86,8 +92,9 @@ class ReversiEngine(object):
         if not self._free_cells or self.score[0] == 0 or self.score[1] == 0:
             return True
         # Otherwise over only if neither player has a legal placement.
-        return (self.get_valid_moves(self.first) == [self.pass_move]
-                and self.get_valid_moves(self.second) == [self.pass_move])
+        return self.get_valid_moves(self.first) == [
+            self.pass_move
+        ] and self.get_valid_moves(self.second) == [self.pass_move]
 
     # Returns the winning player, or self.empty (0) for a draw.
     def get_winner(self):
@@ -171,15 +178,20 @@ class ReversiEngine(object):
         return list(self._free_cells)
 
     def get_valid_moves(self, player):
-        moves = [cell for cell in self._free_cells
-                 if self.move_is_valid(player, cell[0], cell[1])]
+        moves = [
+            cell
+            for cell in self._free_cells
+            if self.move_is_valid(player, cell[0], cell[1])
+        ]
         return moves if moves else [self.pass_move]
 
     def move_is_valid(self, player, x, y):
         if not self.is_on_board(x, y) or self.board[x][y] != self.empty:
             return False
-        return any(self.move_captures_direction(player, x, y, dx, dy)
-                   for dx, dy in self.directions)
+        return any(
+            self.move_captures_direction(player, x, y, dx, dy)
+            for dx, dy in self.directions
+        )
 
     # True if placing `player` at (x, y) captures opponent pieces in direction (dx, dy).
     def move_captures_direction(self, player, x, y, dx, dy):
@@ -231,8 +243,11 @@ class ReversiEngine(object):
 
     # On-board neighbours of (x, y) in all 8 directions.
     def get_corner_neighbours(self, x, y):
-        return [(x + dx, y + dy) for dx, dy in self.directions
-                if self.is_on_board(x + dx, y + dy)]
+        return [
+            (x + dx, y + dy)
+            for dx, dy in self.directions
+            if self.is_on_board(x + dx, y + dy)
+        ]
 
     # -------- heuristic terms --------
     # All midgame terms below are zero-sum: h(P, board) == -h(O, board).
@@ -275,8 +290,9 @@ class ReversiEngine(object):
 
     def get_stable_cells_score_difference(self, player):
         opponent = self.get_opponent(player)
-        return STABILITY_BONUS * (len(self.get_stable_cells(player))
-                                  - len(self.get_stable_cells(opponent)))
+        return STABILITY_BONUS * (
+            len(self.get_stable_cells(player)) - len(self.get_stable_cells(opponent))
+        )
 
     # Game-over reward. Magnitude dominates midgame terms by several orders of magnitude
     # so a guaranteed win/loss outranks any positional consideration. The per-cell margin
@@ -289,14 +305,18 @@ class ReversiEngine(object):
             bonus = -VICTORY_BONUS
         else:
             return 0
-        return bonus + (VICTORY_BONUS / self.cells_count) * self.get_final_score_difference(player)
+        return bonus + (
+            VICTORY_BONUS / self.cells_count
+        ) * self.get_final_score_difference(player)
 
     def get_board_heuristics(self, player):
         if self.is_over():
             return self.get_victory_score_difference(player)
-        return (self.get_mobility_score_difference(player)
-                + self.get_corner_cells_score_difference(player)
-                + self.get_stable_cells_score_difference(player))
+        return (
+            self.get_mobility_score_difference(player)
+            + self.get_corner_cells_score_difference(player)
+            + self.get_stable_cells_score_difference(player)
+        )
 
     # -------- stable cell detection --------
 
@@ -314,12 +334,16 @@ class ReversiEngine(object):
             stable.add((cx, cy))
             for dx, dy in self.edge_directions:
                 stable.update(
-                    self.get_stable_cells_on_edges_in_direction_from_corner(player, cx, cy, dx, dy))
+                    self.get_stable_cells_on_edges_in_direction_from_corner(
+                        player, cx, cy, dx, dy
+                    )
+                )
 
         for cx, cy in self._corners:
             for dx, dy in self.edge_directions:
                 stable.update(
-                    self.get_stable_cells_on_filled_edge(player, cx, cy, dx, dy))
+                    self.get_stable_cells_on_filled_edge(player, cx, cy, dx, dy)
+                )
 
         return stable
 
@@ -329,9 +353,11 @@ class ReversiEngine(object):
     def get_stable_cells_on_edges_in_direction_from_corner(self, player, x, y, dx, dy):
         run = []
         nx, ny = x + dx, y + dy
-        while (self.is_on_board(nx, ny)
-               and self.board[nx][ny] == player
-               and not self.is_on_corner(nx, ny)):
+        while (
+            self.is_on_board(nx, ny)
+            and self.board[nx][ny] == player
+            and not self.is_on_corner(nx, ny)
+        ):
             run.append((nx, ny))
             nx += dx
             ny += dy

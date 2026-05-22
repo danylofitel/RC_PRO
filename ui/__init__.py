@@ -1,4 +1,4 @@
-__author__ = 'vladvalt'
+__author__ = "vladvalt"
 
 
 hello = "Hello world 2014!"

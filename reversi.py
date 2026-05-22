@@ -4,7 +4,7 @@ from controllers.reversi_board_controller import GAME_MODES
 from model.reversi_model import ReversiGameModel
 from ui.board_common import BoardCommonUI
 
-__author__ = 'danylofitel'
+__author__ = "danylofitel"
 
 
 def get_reversi_model():
@@ -12,13 +12,15 @@ def get_reversi_model():
 
 
 def get_reversi_controller(player_moves_first):
-    return ReversiBoardController(get_reversi_model(), GAME_MODES["playerVSPro"], player_moves_first)
+    return ReversiBoardController(
+        get_reversi_model(), GAME_MODES["playerVSPro"], player_moves_first
+    )
 
 
 def reversi(player_moves_first=True):
     root = Tk()
     controller = get_reversi_controller(player_moves_first)
-    app = BoardCommonUI(root, controller)
+    BoardCommonUI(root, controller)
     controller.fill_board()
     root.mainloop()
 

@@ -1,19 +1,17 @@
-__author__ = 'vladvalt'
+__author__ = "vladvalt"
 
 
 from Tkinter import *
 
-class Blob:
 
+class Blob:
     def __init__(self, canvas, xy, ink, delta):
 
         self.canvas = canvas
 
         self.id = self.canvas.create_oval(
-            -10-abs(delta), -10,
-            11+abs(delta), 11,
-            fill=ink
-            )
+            -10 - abs(delta), -10, 11 + abs(delta), 11, fill=ink
+        )
 
         self.canvas.move(self.id, xy[0], xy[1])
 
@@ -25,7 +23,7 @@ class Blob:
             self.start = self.left
 
     def __call__(self):
-        return self.start # get things going
+        return self.start  # get things going
 
     def right(self):
 
@@ -47,6 +45,7 @@ class Blob:
 
         return self.left
 
+
 root = Tk()
 root.title("Blobs")
 root.resizable(0, 0)
@@ -61,10 +60,10 @@ items = [
     Blob(canvas, (100, 50), "red", 5),
     Blob(canvas, (100, 80), "blue", -5),
     Blob(canvas, (100, 120), "green", 1),
-    Blob(canvas, (100, 150), "gold", 20)
-    ]
+    Blob(canvas, (100, 150), "gold", 20),
+]
 
-root.update() # fix geometry
+root.update()  # fix geometry
 
 # loop over items
 
@@ -72,7 +71,7 @@ try:
     while 1:
         for i in range(len(items)):
             items[i] = items[i]()
-            root.update_idletasks() # redraw
-        root.update() # process events
+            root.update_idletasks()  # redraw
+        root.update()  # process events
 except TclError:
-    pass # to avoid errors when the window is closed
+    pass  # to avoid errors when the window is closed

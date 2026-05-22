@@ -1,13 +1,15 @@
 from controllers.common_board_controller import GAME_MODES
 from controllers.common_board_controller import CommonBoardController
 
-__author__ = 'danylofitel'
+__author__ = "danylofitel"
 
-FILLER_MAP = {0: None,
-              1: "reversi_black",
-              2: "reversi_white",
-              3: "reversi_available_move_black",
-              4: "reversi_available_move_white"}
+FILLER_MAP = {
+    0: None,
+    1: "reversi_black",
+    2: "reversi_white",
+    3: "reversi_available_move_black",
+    4: "reversi_available_move_white",
+}
 
 BOT_MOVE_DELAY_MS = 500
 
@@ -25,7 +27,7 @@ class ReversiBoardController(CommonBoardController):
                 self.model.move_computer()
 
     def fill_board(self):
-        self.board.parent.title('Reversi')
+        self.board.parent.title("Reversi")
 
         for i in range(self.model.board_size):
             for j in range(self.model.board_size):
@@ -69,10 +71,14 @@ class ReversiBoardController(CommonBoardController):
         # If it's the human's turn but their only option is to pass, do it for them.
         # Without this, the UI sits idle with no highlighted moves and the player
         # has to click a random cell to trigger move_human's pass branch.
-        if (self.model.get_current_player() != self.computer
-                and self.model.get_available_moves() == [self.model.engine.pass_move]):
+        if (
+            self.model.get_current_player() != self.computer
+            and self.model.get_available_moves() == [self.model.engine.pass_move]
+        ):
             self.write_to_console("Player passes (no valid moves)")
-            self.model.move_human(self.model.engine.pass_move[0], self.model.engine.pass_move[1])
+            self.model.move_human(
+                self.model.engine.pass_move[0], self.model.engine.pass_move[1]
+            )
             self.fill_board()
             if self._check_game_over():
                 return
@@ -93,7 +99,9 @@ class ReversiBoardController(CommonBoardController):
             score = str(score_winner) + ":" + str(score_loser)
 
             if self.game_mode == GAME_MODES["playerVSPlayer"]:
-                self.write_to_console("Player " + str(winner) + " has won with score " + score)
+                self.write_to_console(
+                    "Player " + str(winner) + " has won with score " + score
+                )
             elif self.game_mode == GAME_MODES["playerVSPro"]:
                 if self.model.get_winner() == self.computer:
                     self.write_to_console("Computer has won with score " + score)
@@ -111,13 +119,20 @@ class ReversiBoardController(CommonBoardController):
                 move = "(" + str(x) + ", " + str(y) + ")"
                 self.model.move_human(x, y)
                 if self.game_mode == GAME_MODES["playerVSPlayer"]:
-                    self.write_to_console("Player " + str(self.model.get_current_player()) + " moves to " + move)
+                    self.write_to_console(
+                        "Player "
+                        + str(self.model.get_current_player())
+                        + " moves to "
+                        + move
+                    )
                 elif self.game_mode == GAME_MODES["playerVSPro"]:
                     self.write_to_console("Player moves to " + move)
             elif available_moves == [self.model.engine.pass_move]:
                 self.model.move_human(available_moves[0][0], available_moves[0][1])
                 if self.game_mode == GAME_MODES["playerVSPlayer"]:
-                    self.write_to_console("Player " + str(self.model.get_current_player()) + " passes")
+                    self.write_to_console(
+                        "Player " + str(self.model.get_current_player()) + " passes"
+                    )
                 elif self.game_mode == GAME_MODES["playerVSPro"]:
                     self.write_to_console("Player passes")
             self.fill_board()

@@ -1,9 +1,9 @@
 from ai.reversi_engine import ReversiEngine
 
-__author__ = 'danylofitel'
+__author__ = "danylofitel"
 
 
-class ReversiGameModel():
+class ReversiGameModel:
     def __init__(self, difficulty):
         self.board_size = 8
         self.difficulty = difficulty

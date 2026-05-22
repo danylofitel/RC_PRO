@@ -1,24 +1,18 @@
 import math
 from model.model import GameModel, BOARD_SIZE
 
-__author__ = 'vladvalt'
+__author__ = "vladvalt"
 
 MOVE_TYPES = {"simple": 1, "attack": 2}
 
-DELTA = [
-    (1, 1),
-    (1, -1),
-    (-1, 1),
-    (-1, -1)
-]
+DELTA = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
 
 MAX_NUMBER_OF_SIMPLE_MOVES_IN_SERIES = 30
 
 
 class CheckersGameModel(GameModel):
-
     def __init__(self):
-        self.board_size= 8
+        self.board_size = 8
         self.last_move_type = MOVE_TYPES["simple"]
         self.last_move = None
         self.number_of_simple_moves_in_series = 0
@@ -28,12 +22,17 @@ class CheckersGameModel(GameModel):
         number = 0
         for i in range(self.board_size):
             for j in range(self.board_size):
-                if self.board_position[i][j] == player or self.board_position[i][j] == player + 2:
+                if (
+                    self.board_position[i][j] == player
+                    or self.board_position[i][j] == player + 2
+                ):
                     number += 1
         return number
 
     def create_board(self):
-        self.board_position = [[0 for j in range(self.board_size)] for i in range(self.board_size)]
+        self.board_position = [
+            [0 for j in range(self.board_size)] for i in range(self.board_size)
+        ]
 
         k = 1
         for i in range(self.board_size):
@@ -50,7 +49,7 @@ class CheckersGameModel(GameModel):
                     if i * self.board_size + j >= 5 * BOARD_SIZE / 8:
                         self.board_position[i][j] = 1
 
-        #for i in range(8):
+        # for i in range(8):
         #    for j in range(8):
         #        print self.board_position[i][j],
         #    print ''
@@ -76,9 +75,12 @@ class CheckersGameModel(GameModel):
         return False
 
     def check_for_game_end(self):
-        if self.number_of_simple_moves_in_series >= MAX_NUMBER_OF_SIMPLE_MOVES_IN_SERIES:
-                        self.is_game_over = True
-                        self.winner = 0
+        if (
+            self.number_of_simple_moves_in_series
+            >= MAX_NUMBER_OF_SIMPLE_MOVES_IN_SERIES
+        ):
+            self.is_game_over = True
+            self.winner = 0
         if self.number_of_checkers_left(1) == 0:
             self.is_game_over = True
             self.winner = 2
@@ -91,7 +93,9 @@ class CheckersGameModel(GameModel):
 
     def promote_checker(self, x, y):
         if not self.is_figure_king(x, y):
-            if (x == 0 and self.board_position[x][y] == 1) or (x == self.board_size - 1 and self.board_position[x][y] == 2):
+            if (x == 0 and self.board_position[x][y] == 1) or (
+                x == self.board_size - 1 and self.board_position[x][y] == 2
+            ):
                 self.board_position[x][y] += 2
 
     def perform_simple_move(self, x, y, x_new, y_new):
@@ -135,28 +139,58 @@ class CheckersGameModel(GameModel):
             n = max(self.board_size - x + 1, x + 1)
             for d in DELTA:
                 for i in range(1, n):
-                    if x + i * d[0] < self.board_size - 1 and y + i * d[1] < self.board_size - 1:
+                    if (
+                        x + i * d[0] < self.board_size - 1
+                        and y + i * d[1] < self.board_size - 1
+                    ):
                         if x + i * d[0] > 0 and y + i * d[1] > 0:
                             if self.board_position[x + i * d[0]][y + i * d[1]] != 0:
-                                if self.is_figures_of_the_same_type(x, y, x + i * d[0], y + i * d[1]):
+                                if self.is_figures_of_the_same_type(
+                                    x, y, x + i * d[0], y + i * d[1]
+                                ):
                                     break
                                 else:
-                                    if self.board_position[x + (i + 1) * d[0]][y + (i + 1) * d[1]] == 0:
+                                    if (
+                                        self.board_position[x + (i + 1) * d[0]][
+                                            y + (i + 1) * d[1]
+                                        ]
+                                        == 0
+                                    ):
                                         return MOVE_TYPES["attack"]
                                     else:
                                         break
         else:
-            if x > 1 and y > 1 and self.board_position[x-1][y-1] != 0:
-                if (self.board_position[x-1][y-1] - curr_f) % 2 != 0 and self.board_position[x-2][y-2] == 0:
+            if x > 1 and y > 1 and self.board_position[x - 1][y - 1] != 0:
+                if (
+                    self.board_position[x - 1][y - 1] - curr_f
+                ) % 2 != 0 and self.board_position[x - 2][y - 2] == 0:
                     return MOVE_TYPES["attack"]
-            if x < self.board_size - 2 and y < self.board_size - 2 and self.board_position[x+1][y+1] != 0:
-                if (self.board_position[x+1][y+1] - curr_f) % 2 != 0 and self.board_position[x+2][y+2] == 0:
+            if (
+                x < self.board_size - 2
+                and y < self.board_size - 2
+                and self.board_position[x + 1][y + 1] != 0
+            ):
+                if (
+                    self.board_position[x + 1][y + 1] - curr_f
+                ) % 2 != 0 and self.board_position[x + 2][y + 2] == 0:
                     return MOVE_TYPES["attack"]
-            if x > 1 and y < self.board_size - 2 and self.board_position[x-1][y+1] != 0:
-                if (self.board_position[x-1][y+1] - curr_f) % 2 != 0 and self.board_position[x-2][y+2] == 0:
+            if (
+                x > 1
+                and y < self.board_size - 2
+                and self.board_position[x - 1][y + 1] != 0
+            ):
+                if (
+                    self.board_position[x - 1][y + 1] - curr_f
+                ) % 2 != 0 and self.board_position[x - 2][y + 2] == 0:
                     return MOVE_TYPES["attack"]
-            if x < self.board_size - 2 and y > 1 and self.board_position[x+1][y-1] != 0:
-                if (self.board_position[x+1][y-1] - curr_f) % 2 != 0 and self.board_position[x+2][y-2] == 0:
+            if (
+                x < self.board_size - 2
+                and y > 1
+                and self.board_position[x + 1][y - 1] != 0
+            ):
+                if (
+                    self.board_position[x + 1][y - 1] - curr_f
+                ) % 2 != 0 and self.board_position[x + 2][y - 2] == 0:
                     return MOVE_TYPES["attack"]
 
         return MOVE_TYPES["simple"]
@@ -178,7 +212,10 @@ class CheckersGameModel(GameModel):
             return 1
 
     def is_figure_of_current_player(self, x, y):
-        return self.board_position[x][y] == self.current_player or self.board_position[x][y] == self.current_player + 2
+        return (
+            self.board_position[x][y] == self.current_player
+            or self.board_position[x][y] == self.current_player + 2
+        )
 
     def should_attack_on_this_move(self):
         should_attack = False
@@ -201,33 +238,68 @@ class CheckersGameModel(GameModel):
                 n = max(self.board_size - x + 1, x + 1)
                 for d in DELTA:
                     for i in range(1, n):
-                        if x + i * d[0] < self.board_size and y + i * d[1] < self.board_size:
+                        if (
+                            x + i * d[0] < self.board_size
+                            and y + i * d[1] < self.board_size
+                        ):
                             if x + i * d[0] >= 0 and y + i * d[1] >= 0:
                                 if self.board_position[x + i * d[0]][y + i * d[1]] != 0:
                                     break
                                 available_moves.append((x + i * d[0], y + i * d[1]))
             else:
-                if y > 0 and self.board_position[x + self.get_move_direction()][y - 1] == 0:
+                if (
+                    y > 0
+                    and self.board_position[x + self.get_move_direction()][y - 1] == 0
+                ):
                     available_moves.append((x + self.get_move_direction(), y - 1))
-                if y < self.board_size - 1 and self.board_position[x + self.get_move_direction()][y + 1] == 0:
+                if (
+                    y < self.board_size - 1
+                    and self.board_position[x + self.get_move_direction()][y + 1] == 0
+                ):
                     available_moves.append((x + self.get_move_direction(), y + 1))
         elif move_type == MOVE_TYPES["attack"]:
             if self.is_figure_king(x, y):
                 n = max(self.board_size - x + 1, x + 1)
                 for d in DELTA:
                     for i in range(1, n):
-                        if x + i * d[0] < self.board_size - 1 and y + i * d[1] < self.board_size - 1:
+                        if (
+                            x + i * d[0] < self.board_size - 1
+                            and y + i * d[1] < self.board_size - 1
+                        ):
                             if x + i * d[0] > 0 and y + i * d[1] > 0:
                                 if self.board_position[x + i * d[0]][y + i * d[1]] != 0:
-                                    if self.is_figures_of_the_same_type(x, y, x + i * d[0], y + i * d[1]):
+                                    if self.is_figures_of_the_same_type(
+                                        x, y, x + i * d[0], y + i * d[1]
+                                    ):
                                         break
                                     else:
-                                        if self.board_position[x + (i + 1) * d[0]][y + (i + 1) * d[1]] == 0:
-                                            for j in range(i+1, n):
-                                                if x + j * d[0] < self.board_size and y + j * d[1] < self.board_size:
-                                                    if x + j * d[0] >= 0 and y + j * d[1] >= 0:
-                                                        if self.board_position[x + j * d[0]][y + j * d[1]] == 0:
-                                                            available_moves.append((x + j * d[0], y + j * d[1]))
+                                        if (
+                                            self.board_position[x + (i + 1) * d[0]][
+                                                y + (i + 1) * d[1]
+                                            ]
+                                            == 0
+                                        ):
+                                            for j in range(i + 1, n):
+                                                if (
+                                                    x + j * d[0] < self.board_size
+                                                    and y + j * d[1] < self.board_size
+                                                ):
+                                                    if (
+                                                        x + j * d[0] >= 0
+                                                        and y + j * d[1] >= 0
+                                                    ):
+                                                        if (
+                                                            self.board_position[
+                                                                x + j * d[0]
+                                                            ][y + j * d[1]]
+                                                            == 0
+                                                        ):
+                                                            available_moves.append(
+                                                                (
+                                                                    x + j * d[0],
+                                                                    y + j * d[1],
+                                                                )
+                                                            )
                                                         else:
                                                             break
                                             break
@@ -235,18 +307,38 @@ class CheckersGameModel(GameModel):
                                             break
             else:
                 curr_f = self.board_position[x][y]
-                if x > 1 and y > 1 and self.board_position[x-1][y-1] != 0:
-                    if (self.board_position[x-1][y-1] - curr_f) % 2 != 0 and self.board_position[x-2][y-2] == 0:
-                        available_moves.append((x-2, y-2))
-                if x < self.board_size - 2 and y < self.board_size - 2 and self.board_position[x+1][y+1] != 0:
-                    if (self.board_position[x+1][y+1] - curr_f) % 2 != 0 and self.board_position[x+2][y+2] == 0:
-                        available_moves.append((x+2, y+2))
-                if x > 1 and y < self.board_size - 2 and self.board_position[x-1][y+1] != 0:
-                    if (self.board_position[x-1][y+1] - curr_f) % 2 != 0 and self.board_position[x-2][y+2] == 0:
-                        available_moves.append((x-2, y+2))
-                if x < self.board_size - 2 and y > 1 and self.board_position[x+1][y-1] != 0:
-                    if (self.board_position[x+1][y-1] - curr_f) % 2 != 0 and self.board_position[x+2][y-2] == 0:
-                        available_moves.append((x+2, y-2))
+                if x > 1 and y > 1 and self.board_position[x - 1][y - 1] != 0:
+                    if (
+                        self.board_position[x - 1][y - 1] - curr_f
+                    ) % 2 != 0 and self.board_position[x - 2][y - 2] == 0:
+                        available_moves.append((x - 2, y - 2))
+                if (
+                    x < self.board_size - 2
+                    and y < self.board_size - 2
+                    and self.board_position[x + 1][y + 1] != 0
+                ):
+                    if (
+                        self.board_position[x + 1][y + 1] - curr_f
+                    ) % 2 != 0 and self.board_position[x + 2][y + 2] == 0:
+                        available_moves.append((x + 2, y + 2))
+                if (
+                    x > 1
+                    and y < self.board_size - 2
+                    and self.board_position[x - 1][y + 1] != 0
+                ):
+                    if (
+                        self.board_position[x - 1][y + 1] - curr_f
+                    ) % 2 != 0 and self.board_position[x - 2][y + 2] == 0:
+                        available_moves.append((x - 2, y + 2))
+                if (
+                    x < self.board_size - 2
+                    and y > 1
+                    and self.board_position[x + 1][y - 1] != 0
+                ):
+                    if (
+                        self.board_position[x + 1][y - 1] - curr_f
+                    ) % 2 != 0 and self.board_position[x + 2][y - 2] == 0:
+                        available_moves.append((x + 2, y - 2))
         return available_moves
 
     def is_figures_of_the_same_type(self, x, y, a, b):
@@ -259,12 +351,21 @@ class CheckersGameModel(GameModel):
         number = 0
         for i in range(self.board_size):
             for j in range(self.board_size):
-                if self.board_position[i][j] == player_num or self.board_position[i][j] == player_num + 2:
+                if (
+                    self.board_position[i][j] == player_num
+                    or self.board_position[i][j] == player_num + 2
+                ):
                     number += 1
         return number
 
     def is_free_to_deselect(self):
-        return not (self.last_move_type == MOVE_TYPES["attack"] and self.should_continue_attack())
+        return not (
+            self.last_move_type == MOVE_TYPES["attack"]
+            and self.should_continue_attack()
+        )
 
     def should_continue_attack(self):
-        return self.get_move_type(self.last_move[0], self.last_move[1]) == MOVE_TYPES["attack"]
+        return (
+            self.get_move_type(self.last_move[0], self.last_move[1])
+            == MOVE_TYPES["attack"]
+        )

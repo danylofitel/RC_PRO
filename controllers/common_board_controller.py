@@ -1,42 +1,46 @@
 import os
 from PIL import Image, ImageTk
-__author__ = 'vladvalt'
 
-FILLERS = {"checker_white": "Apple.png",
-           "checker_black": "Vista.png",
-           "checker_king_white": "king_Apple.png",
-           "checker_king_black": "king_natural_Apple.png",
-           "reversi_white": "Piece_White.png",
-           "reversi_black": "Piece_Black.png",
-           "reversi_available_move_white": "Available_Move_White.png",
-           "reversi_available_move_black": "Available_Move_Black.png"}
+__author__ = "vladvalt"
 
-IMAGE_LOCATION = os.path.join(os.path.dirname(__file__), '../ui/pictures/')
+FILLERS = {
+    "checker_white": "Apple.png",
+    "checker_black": "Vista.png",
+    "checker_king_white": "king_Apple.png",
+    "checker_king_black": "king_natural_Apple.png",
+    "reversi_white": "Piece_White.png",
+    "reversi_black": "Piece_Black.png",
+    "reversi_available_move_white": "Available_Move_White.png",
+    "reversi_available_move_black": "Available_Move_Black.png",
+}
+
+IMAGE_LOCATION = os.path.join(os.path.dirname(__file__), "../ui/pictures/")
 
 GAME_MODES = {"playerVSPlayer": 1, "playerVSPro": 2, "proVSPro": 3, "proVSEnemy": 4}
 
 
 class CommonBoardController:
-
     def __init__(self, model):
         self.board = None
         self.model = model
         self.img_size = 32
         self.game_mode = GAME_MODES["playerVSPlayer"]
 
-    #just derive it
+    # just derive it
     def fill_board(self):
-        #TODO clear all this stuff later
+        # TODO clear all this stuff later
         image = Image.open(IMAGE_LOCATION + "Apple.png")
         photo = ImageTk.PhotoImage(image)
         for i in range(self.board.numberOfRows):
-            self.board.cells[i][i].create_image(self.img_size, self.img_size, image=photo)
-            #python bug force us to keep reference
-            self.board.cells[i][i].image=photo
+            self.board.cells[i][i].create_image(
+                self.img_size, self.img_size, image=photo
+            )
+            # python bug force us to keep reference
+            self.board.cells[i][i].image = photo
             self.write_to_console("Cell number " + str(i) + " added")
 
     def write_to_console(self, txt):
-        self.board.console.insert("1.0", txt + '\n')
+        self.board.console.insert("1.0", txt + "\n")
 
     def set_board(self, board):
         self.board = board
@@ -48,12 +52,14 @@ class CommonBoardController:
         if filler in FILLERS:
             image = Image.open(IMAGE_LOCATION + FILLERS[filler])
             photo = ImageTk.PhotoImage(image)
-            self.board.cells[x][y].create_image(self.img_size, self.img_size, image=photo)
-            #python bug force us to keep reference
-            self.board.cells[x][y].image=photo
+            self.board.cells[x][y].create_image(
+                self.img_size, self.img_size, image=photo
+            )
+            # python bug force us to keep reference
+            self.board.cells[x][y].image = photo
 
     def modify_cell(self, x, y, filler):
-        #self.clear_cell(x, y)
+        # self.clear_cell(x, y)
         self.fill_cell(x, y, filler)
 
     def change_cell_color(self, x, y, color):
@@ -64,6 +70,6 @@ class CommonBoardController:
         print("x = ", x)
         print("y = ", y)
 
-    #show possible moves on the board
+    # show possible moves on the board
     def show_available_moves(self):
         moves = self.model.get_available_moves()
