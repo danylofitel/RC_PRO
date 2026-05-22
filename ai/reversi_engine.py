@@ -3,641 +3,428 @@ __author__ = "danylofitel"
 from random import randrange
 
 
-# Integer constants representing infinity
-int_max = 1000000000000
-int_min = -int_max
+# Search bounds (treated as +/- infinity for negamax).
+INT_MAX = 10 ** 12
+INT_MIN = -INT_MAX
+
+# Heuristic weights.
+MOBILITY_BONUS = 100
+CORNER_CELL_BONUS = 10_000          # 100 * MOBILITY_BONUS
+STABILITY_BONUS = 5_000             # CORNER_CELL_BONUS // 2
+VICTORY_BONUS = INT_MAX // 4
+
+# When True, get_best_move prints the chosen value and search depth.
+DEBUG = True
 
 
-# Reversi game engine
+# Reversi game engine. Board coordinates are (row, column), zero-indexed.
 class ReversiEngine(object):
-    # States of a cell and player titles
+    # Cell contents / player identifiers.
     empty = 0
     first = 1
     second = 2
 
-    # List of possible directions from the cell
-    directions = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
+    # All eight (dx, dy) directions from a cell.
+    directions = ((-1, -1), (-1, 0), (-1, 1),
+                  (0, -1),           (0, 1),
+                  (1, -1),  (1, 0),  (1, 1))
 
-    # A special index for specifying pass
+    # Orthogonal directions from a corner along its two adjacent edges.
+    edge_directions = ((-1, 0), (0, -1), (0, 1), (1, 0))
+
+    # Sentinel returned by get_valid_moves / accepted by move() when no legal move exists.
     pass_move = (-1, -1)
 
-    # Construct a game board
     def __init__(self, board_size):
-        # Size of the square board
         self.size = board_size
-        self.cells_count = self.size ** 2
+        self.cells_count = board_size ** 2
 
-        # A list of board columns
-        self.board = []
+        self.board = [[self.empty for _ in range(board_size)] for _ in range(board_size)]
 
-        # Fill the board with empty cells
-        for col in range(self.size):
-            self.board.append([self.empty for i in range(self.size)])
+        # Standard Reversi starting position.
+        mid = board_size // 2
+        self.board[mid - 1][mid - 1] = self.second
+        self.board[mid][mid] = self.second
+        self.board[mid - 1][mid] = self.first
+        self.board[mid][mid - 1] = self.first
 
-        # Fill the four squares in the middle
-        self.board[self.size // 2 - 1][self.size // 2 - 1] = self.second
-        self.board[self.size // 2][self.size // 2] = self.second
-        self.board[self.size // 2 - 1][self.size // 2] = self.first
-        self.board[self.size // 2][self.size // 2 - 1] = self.first
-
-        # Initialize score for both players
+        # score[i] = number of cells owned by player (i + 1).
         self.score = [2, 2]
 
-        # Bonus for each available move
-        self.mobility_bonus = 100
+        # Precomputed corner coordinates.
+        m = board_size - 1
+        self._corners = ((0, 0), (0, m), (m, 0), (m, m))
 
-        # Bonus points for each corner cell
-        self.corner_cell_bonus = 100 * self.mobility_bonus
+        # Free cells maintained incrementally by move()/undo_move().
+        self._free_cells = {(x, y)
+                            for x in range(board_size)
+                            for y in range(board_size)
+                            if self.board[x][y] == self.empty}
 
-        # Bonus points for each stable cell
-        self.stability_bonus = self.corner_cell_bonus / 2
-
-        # Points for victory
-        self.victory_bonus = int_max / 4
-
-        # A stack of moves
+        # Optional history of moves for callers that want undo without tracking
+        # flipped_cells themselves. Populated only when move() is called with
+        # push_stack=True; passes are not recorded.
         self.moves_stack = []
 
-    # Represent a game board as a string
     def __repr__(self):
-        vertical = "|"
-        horizontal_numbers = "   0 1 2 3 4 5 6 7 "
+        header = "  " + " ".join(str(y) for y in range(self.size))
+        rows = ["{0}|{1}|".format(x, " ".join(str(self.board[x][y]) for y in range(self.size)))
+                for x in range(self.size)]
+        return header + "\n" + "\n".join(rows) + "\n"
 
-        j = 0
-        rep = horizontal_numbers + "\n"
-        for x in range(self.size):
-            rep += str(j)
-            rep += vertical
+    # -------- game state queries --------
 
-            for y in range(self.size):
-                rep += " " + str(self.board[x][y])
-            rep += vertical + "\n"
-            j += 1
-
-        return rep
-
-    # Get other player
     def get_opponent(self, player):
         if player == self.first:
             return self.second
-        elif player == self.second:
+        if player == self.second:
             return self.first
-        else:
-            raise Exception("Invalid player")
+        raise ValueError("Invalid player: {0}".format(player))
 
-    # Check if the game is over
     def is_over(self):
-        # The game is over if all cells are filled
-        if self.score[0] + self.score[1] == self.cells_count:
+        # Board full, or one side wiped out: trivially over.
+        if not self._free_cells or self.score[0] == 0 or self.score[1] == 0:
             return True
-        # The game is over if one of the player has no cells left
-        elif self.score[0] == 0 or self.score[1] == 0:
-            return True
-        # The game is over when none of the players can move
-        else:
-            return self.get_valid_moves(self.first) == [self.pass_move] and self.get_valid_moves(self.second) == [
-                self.pass_move]
+        # Otherwise over only if neither player has a legal placement.
+        return (self.get_valid_moves(self.first) == [self.pass_move]
+                and self.get_valid_moves(self.second) == [self.pass_move])
 
-    # Get the winner
+    # Returns the winning player, or self.empty (0) for a draw.
     def get_winner(self):
-        # Checking disabled for performance reasons
-        #if not self.is_over():
-        #    raise Exception("The game is still in progress")
-        #else:
-        # The first player has won
         if self.score[0] > self.score[1]:
             return self.first
-        # The second player has won
-        elif self.score[0] < self.score[1]:
+        if self.score[0] < self.score[1]:
             return self.second
-        # Both players scored equally, this means draw
-        else:
-            return None
+        return self.empty
 
-    # Perform a move
-    def move(self, player, x, y, push_stack=False):
-        # Return an empty list if move is a pass
-        if x == self.pass_move[0] and y == self.pass_move[1]:
-            return []
-
-        # Make sure the move is valid
-        #if not self.move_is_valid(player, x, y):
-        #    raise Exception("Invalid move [" + str(x) + ", " + str(y) + "]")
-
-        # Prepare a list of flipped cells
-        flipped_cells = []
-
-        # Mark the cell
-        self.board[x][y] = player
-        self.score[player - 1] += 1
-
-        # Flip cells in all directions
-        for dx, dy in self.directions:
-            for cell in self.flip_cells_in_direction(player, x, y, dx, dy):
-                flipped_cells.append(cell)
-
-        # Push the move into the moves stack
-        if push_stack:
-            self.moves_stack.append([player, (x, y), flipped_cells])
-
-        # Return the list of opponent's cells that have been flipped
-        return flipped_cells
-
-    # Return the board to the state before the move
-    def undo_move(self, player, x, y, flipped_cells, pop_stack=False):
-        # The move needs to be undone only if it was not a pass
-        if not (x == self.pass_move[0] and y == self.pass_move[1]):
-            # Other player
-            opponent = self.get_opponent(player)
-
-            # Clear current cell
-            self.board[x][y] = self.empty
-            self.score[player - 1] -= 1
-
-            # Flip back all cells flipped by the move
-            for cell in flipped_cells:
-                self.board[cell[0]][cell[1]] = opponent
-                self.score[player - 1] -= 1
-                self.score[opponent - 1] += 1
-
-            # Pop the move from moves stack
-            if pop_stack:
-                self.moves_stack.pop(len(self.moves_stack) - 1)
-
-    def undo_last_move(self):
-        # Check if there are moves in the stack
-        if len(self.moves_stack) == 0:
-            raise Exception("Moves stack is empty")
-
-        # Get the last move
-        last_move = self.moves_stack.pop(len(self.moves_stack) - 1)
-
-        # Undo the last move
-        self.undo_move(last_move[0], last_move[1][0], last_move[1][1], last_move[2])
-
-    # Perform a move by current player using built-in AI
-    def move_ai(self, player, difficulty):
-        # Find the best move for the player
-        move = self.get_best_move(player, difficulty)
-
-        # Perform a move
-        return move[0], self.move(player, move[0][0], move[0][1])
-
-    # Get the player's score
     def get_score(self, player):
         return self.score[player - 1]
 
-    # Get the difference between the player's score and opponent's score
     def get_score_difference(self, player):
-        # Return difference between the corresponding scores
         return self.score[player - 1] - self.score[self.get_opponent(player) - 1]
 
-    # Get the score of the player assuming that the game is over
+    # Score difference assuming the game is over. Wipeouts are scored at +/- board size
+    # rather than the actual remaining count, since the trailing side has "lost everything".
     def get_final_score_difference(self, player):
         opponent = self.get_opponent(player)
         if self.score[player - 1] == 0:
             return -self.cells_count
-        elif self.score[opponent - 1] == 0:
+        if self.score[opponent - 1] == 0:
             return self.cells_count
-        else:
-            return self.score[player - 1] - self.score[opponent - 1]
+        return self.score[player - 1] - self.score[opponent - 1]
 
-    # Get the difference between the number of player's available moves and his opponent's available moves
-    def get_mobility_score_difference(self, player):
-        # Get valid moves for both players
-        player_moves = self.get_valid_moves(player)
-        opponent_moves = self.get_valid_moves(self.get_opponent(player))
+    # -------- move execution --------
 
-        # A pass move should not be considered
-        if player_moves == [self.pass_move]:
-            player_moves = []
+    def move(self, player, x, y, push_stack=False):
+        # Pass: nothing to do, no cells flipped. Not recorded in the stack either.
+        if (x, y) == self.pass_move:
+            return []
 
-        if opponent_moves == [self.pass_move]:
-            opponent_moves = []
+        self.board[x][y] = player
+        self.score[player - 1] += 1
+        self._free_cells.discard((x, y))
 
-        return self.mobility_bonus * (len(player_moves) - 8 * len(opponent_moves))
+        flipped = []
+        for dx, dy in self.directions:
+            flipped.extend(self.flip_cells_in_direction(player, x, y, dx, dy))
 
-    # Get heuristic score of corner cells
-    def get_corner_cells_score_difference(self, player):
+        if push_stack:
+            self.moves_stack.append((player, (x, y), flipped))
+        return flipped
+
+    def undo_move(self, player, x, y, flipped_cells, pop_stack=False):
+        # Pass: there was no move to undo.
+        if (x, y) == self.pass_move:
+            return
+
         opponent = self.get_opponent(player)
 
-        # Difference between the number of the player's and opponent's corner cells
-        corners_count = 0
+        self.board[x][y] = self.empty
+        self.score[player - 1] -= 1
+        self._free_cells.add((x, y))
 
-        # Check all corner cells
-        for c in self.get_corners():
-            if self.board[c[0]][c[1]] == player:
-                corners_count += 1
-            elif self.board[c[0]][c[1]] == opponent:
-                corners_count -= 8
-            else:
-                # Check if the corner cells is potentially going to be occupied
-                for neighbour in self.get_corner_neighbours(c[0], c[1]):
-                    if self.board[neighbour[0]][neighbour[1]] == player:
-                        corners_count -= 0.25
-                    elif self.board[neighbour[0]][neighbour[1]] == opponent:
-                        corners_count += 0.05
+        for fx, fy in flipped_cells:
+            self.board[fx][fy] = opponent
+            self.score[player - 1] -= 1
+            self.score[opponent - 1] += 1
 
-        # Each corner cell costs additional bonus points
-        return int(self.corner_cell_bonus * corners_count)
+        if pop_stack:
+            self.moves_stack.pop()
 
-    # Get heuristic score of stable edges on current board
-    def get_stable_cells_score_difference(self, player):
-        # All stable cells provide additional bonus score
-        return self.stability_bonus * (
-            len(self.get_stable_cells(player)) - 8 * len(self.get_stable_cells(self.get_opponent(player))))
+    # Undo the most recent move() that was called with push_stack=True. Does not
+    # account for passes (passes were never pushed), so passing the turn between
+    # two real moves and then calling undo_last_move() undoes the earlier real move.
+    def undo_last_move(self):
+        if not self.moves_stack:
+            raise Exception("Moves stack is empty")
+        player, (x, y), flipped = self.moves_stack.pop()
+        self.undo_move(player, x, y, flipped)
 
-    # Get heuristic score for the victory of one of the players
-    # Can be called only after the game is over
-    def get_victory_score_difference(self, player):
-        # Value of victory in terms of score
-        # It must significantly exceed the maximal score actually possible\
-        # to prevent situations where loss scores more than victory
+    # Compute the best move via negamax, play it, and return ((x, y), flipped_cells).
+    def move_ai(self, player, difficulty):
+        (x, y), _ = self.get_best_move(player, difficulty)
+        return (x, y), self.move(player, x, y)
 
-        winner = self.get_winner()
+    # -------- move generation / validation --------
 
-        if winner == player:
-            bonus = self.victory_bonus
-        elif winner == self.get_opponent(player):
-            bonus = -self.victory_bonus
-        else:
-            return 0
-
-        bonus_per_cell = self.victory_bonus / self.cells_count
-        bonus += bonus_per_cell * self.get_final_score_difference(player)
-
-        return bonus
-
-    # Get heuristic value of current position
-    def get_board_heuristics(self, player):
-        # The score is determined by a number of values
-        if self.is_over():
-            return self.get_victory_score_difference(player)
-        else:
-            return self.get_mobility_score_difference(player) + self.get_corner_cells_score_difference(
-                player) + self.get_stable_cells_score_difference(player)
-
-    # Check if the cell is on the board
-    def is_on_board(self, x, y):
-        return 0 <= x < self.size and 0 <= y < self.size
-
-    # Check if the cell is in at the edge of the board
-    def is_on_edge(self, x, y):
-        min_coord = 0
-        max_coord = self.size - 1
-        return (x == min_coord or x == max_coord) or (y == min_coord or y == max_coord)
-
-    # Check if the cell is in one of the four corners
-    def is_on_corner(self, x, y):
-        min_coord = 0
-        max_coord = self.size - 1
-        return (x == min_coord or x == max_coord) and (y == min_coord or y == max_coord)
-
-    # Get corner neighbours
-    def get_corner_neighbours(self, x, y):
-        # The list of neighbour cells
-        neighbours = []
-
-        # Check all directions
-        for direction in self.directions:
-            neighbour = (x + direction[0], y + direction[1])
-
-            # Only add cells that are on the board
-            if self.is_on_board(neighbour[0], neighbour[1]):
-                neighbours.append(neighbour)
-
-        return neighbours
-
-    # Get the list of four corner cells
-    def get_corners(self):
-        max_index = self.size - 1
-        return [(0, 0), (0, max_index), (max_index, 0), (max_index, max_index)]
-
-    # Get stable cells in the direction from corner
-    def get_stable_cells_on_edges_in_direction_from_corner(self, player, x, y, dx, dy):
-        # The cell has to be a corner
-        #if not self.is_on_corner(x, y):
-        #    raise Exception("The cell is not on corner")
-
-        # The list of stable cells found in direction (dx, dy) from corner cell (x, y)
-        stable = []
-
-        # Neighbour of current cell in selected direction
-        nx = x + dx
-        ny = y + dy
-
-        # Move in direction until another corner or another player's cell is reached
-        while self.is_on_board(nx, ny) and self.board[nx][ny] == player and not self.is_on_corner(nx, ny):
-            # Save the stable cell
-            stable.append((nx, ny))
-
-            # Progress in the same direction
-            nx += dx
-            ny += dy
-
-        return stable
-
-    # Get stable cells on filled edge between corners
-    def get_stable_cells_on_filled_edge(self, player, x, y, dx, dy):
-        # The cell has to be a corner
-        #if not self.is_on_corner(x, y):
-        #    raise Exception("The cell is not on corner")
-
-        # Player cells on current edge
-        player_cells = []
-
-        # Index of current cell in selected direction
-        nx = x
-        ny = y
-
-        # Move in direction until another corner or another player's cell is reached
-        while self.is_on_board(nx, ny):
-            # Save the stable cell if it belongs to the player
-            if self.board[nx][ny] == player:
-                player_cells.append((nx, ny))
-            # If an empty cell has been found, there's no guarantees of stability
-            elif self.board[nx][ny] == self.empty:
-                return []
-
-            # Progress in the same direction
-            nx += dx
-            ny += dy
-
-        # If the whole edge is filled, return cells occupied by the player
-        return player_cells
-
-    # Get  a list of stable cells, i.e. the cells that can't be flipped in the future
-    def get_stable_cells(self, player):
-        # A list of stable cells
-        stable_cells = []
-
-        # Directions from corners to stable neighbour cells
-        corner_directions = [(-1, 0), (0, -1), (0, 1), (1, 0)]
-
-        # Corners are the first candidates
-        for corner in self.get_corners():
-            if self.board[corner[0]][corner[1]] == player:
-                # The corner is already stable
-                if corner not in stable_cells:
-                    stable_cells.append(corner)
-
-                # Move along the edges from current corner and find other stable cells
-                for direction in corner_directions:
-                    for stable in self.get_stable_cells_on_edges_in_direction_from_corner(
-                            player,
-                            corner[0],
-                            corner[1],
-                            direction[0],
-                            direction[1]):
-                        if stable not in stable_cells:
-                            stable_cells.append(stable)
-
-        # Move along the filled edges and add search for remaining stable cells
-        for direction in corner_directions:
-            for stable in self.get_stable_cells_on_filled_edge(
-                    player,
-                    corner[0],
-                    corner[1],
-                    direction[0],
-                    direction[1]):
-                if stable not in stable_cells:
-                    stable_cells.append(stable)
-
-        return stable_cells
-
-    # Get all free cells
     def get_free_cells(self):
-        free_cells = []
-        for x in range(self.size):
-            for y in range(self.size):
-                if self.board[x][y] == self.empty:
-                    free_cells.append((x, y))
-        return free_cells
+        return list(self._free_cells)
 
-    # Get a list of valid moves for current player
     def get_valid_moves(self, player):
-        # Create a list of possible moves
-        valid_moves = []
+        moves = [cell for cell in self._free_cells
+                 if self.move_is_valid(player, cell[0], cell[1])]
+        return moves if moves else [self.pass_move]
 
-        # Loop through empty cells
-        for cell in self.get_free_cells():
-            # Check if the move is valid
-            if self.move_is_valid(player, cell[0], cell[1]):
-                valid_moves.append(cell)
-
-        # Add pass if there are no free cells
-        if len(valid_moves) == 0:
-            valid_moves.append(self.pass_move)
-
-        return valid_moves
-
-    # Check if the possible move is valid
     def move_is_valid(self, player, x, y):
-        # The cell has to be on board
-        if not self.is_on_board(x, y):
+        if not self.is_on_board(x, y) or self.board[x][y] != self.empty:
             return False
-        # The cell has to be empty
-        elif not self.board[x][y] == self.empty:
-            return False
-        else:
-            # Check all possible directions from current cell
-            for dx, dy in self.directions:
-                if self.move_captures_direction(player, x, y, dx, dy):
-                    return True
-            # No valid directions exist
-            return False
+        return any(self.move_captures_direction(player, x, y, dx, dy)
+                   for dx, dy in self.directions)
 
-    # Check if the move affects the direction
+    # True if placing `player` at (x, y) captures opponent pieces in direction (dx, dy).
     def move_captures_direction(self, player, x, y, dx, dy):
-        # Current player's opponent
         opponent = self.get_opponent(player)
+        nx, ny = x + dx, y + dy
 
-        # Neighbour in current direction
-        nx = x + dx
-        ny = y + dy
-
-        # The neighbour cell has to be on the board
-        if not self.is_on_board(nx, ny):
-            return False
-        # The neighbour cell has to belong to the opponent
-        elif not self.board[nx][ny] == opponent:
+        # Must start by stepping onto an opponent cell.
+        if not self.is_on_board(nx, ny) or self.board[nx][ny] != opponent:
             return False
 
-        # Skip the rest of cells belonging to the opponent
+        # Walk through the opponent's run; the move captures iff it ends on our own piece.
         while self.is_on_board(nx, ny) and self.board[nx][ny] == opponent:
             nx += dx
             ny += dy
+        return self.is_on_board(nx, ny) and self.board[nx][ny] == player
 
-        # If current cell belongs to the player, it is a valid move
-        if self.is_on_board(nx, ny):
-            if self.board[nx][ny] == player:
-                return True
-
-        # Otherwise the direction is not valid
-        return False
-
-    # Flip cells in specified direction
+    # Flip opponent pieces in direction (dx, dy) and return the list of flipped coordinates.
     def flip_cells_in_direction(self, player, x, y, dx, dy):
-        # Flip all cells and return the list containing them if the direction is valid
-        if self.move_captures_direction(player, x, y, dx, dy):
-            # Current player's opponent
-            opponent = self.get_opponent(player)
-
-            # Neighbour in current direction, belongs to the opponent
-            nx = x + dx
-            ny = y + dy
-
-            # List of cells that are possibly flipped by the move
-            flipped_cells = []
-
-            # Iterate through all cells in current direction belonging to the opponent
-            while self.is_on_board(nx, ny) and self.board[nx][ny] == opponent:
-                self.board[nx][ny] = player
-                self.score[player - 1] += 1
-                self.score[opponent - 1] -= 1
-                flipped_cells.append((nx, ny))
-                nx += dx
-                ny += dy
-
-            # Return the list of flipped cells
-            return flipped_cells
-        # Otherwise return an empty list since no cells have been flipped
-        else:
+        if not self.move_captures_direction(player, x, y, dx, dy):
             return []
 
-    # Get the list of possible moves for the player associated with their values
-    def get_move_evaluations(self, player, search_depth, max_value):
-        # The best result so far, initial value is the smallest possible
-        max_so_far = int_min
+        opponent = self.get_opponent(player)
+        flipped = []
+        nx, ny = x + dx, y + dy
+        while self.is_on_board(nx, ny) and self.board[nx][ny] == opponent:
+            self.board[nx][ny] = player
+            self.score[player - 1] += 1
+            self.score[opponent - 1] -= 1
+            flipped.append((nx, ny))
+            nx += dx
+            ny += dy
+        return flipped
 
-        # Move-value pairs
-        evaluations = []
+    # -------- board geometry --------
 
-        # The list of valid moves for current player
-        valid_moves = self.get_valid_moves(player)
+    def is_on_board(self, x, y):
+        return 0 <= x < self.size and 0 <= y < self.size
 
-        for move in valid_moves:
-            value = self.get_move_value(player, move[0], move[1], search_depth - 1, -max_so_far)
+    def is_on_edge(self, x, y):
+        m = self.size - 1
+        return x == 0 or x == m or y == 0 or y == m
 
-            # Alpha-Beta Pruning
-            # The current result is over the maximum value.
-            # This means that the opponent has at least one
-            # move that will result in a better outcome by avoiding
-            # this branch completely. Therefore, there is no
-            # point in searching it further, so stop searching
-            # and yield the evaluation.
-            if value > max_value:
-                evaluations.append((move, value))
+    def is_on_corner(self, x, y):
+        m = self.size - 1
+        return (x == 0 or x == m) and (y == 0 or y == m)
+
+    def get_corners(self):
+        return self._corners
+
+    # On-board neighbours of (x, y) in all 8 directions.
+    def get_corner_neighbours(self, x, y):
+        return [(x + dx, y + dy) for dx, dy in self.directions
+                if self.is_on_board(x + dx, y + dy)]
+
+    # -------- heuristic terms --------
+    # All midgame terms below are zero-sum: h(P, board) == -h(O, board).
+    # Negamax depends on this; without it the AI sees inconsistent values at even
+    # vs odd plies and plays incoherently.
+
+    def get_mobility_score_difference(self, player):
+        opponent = self.get_opponent(player)
+        player_moves = self.get_valid_moves(player)
+        opponent_moves = self.get_valid_moves(opponent)
+
+        # A forced pass does not contribute to mobility.
+        if player_moves == [self.pass_move]:
+            player_moves = []
+        if opponent_moves == [self.pass_move]:
+            opponent_moves = []
+
+        return MOBILITY_BONUS * (len(player_moves) - len(opponent_moves))
+
+    def get_corner_cells_score_difference(self, player):
+        opponent = self.get_opponent(player)
+        score = 0.0
+
+        for cx, cy in self._corners:
+            cell = self.board[cx][cy]
+            if cell == player:
+                score += 1
+            elif cell == opponent:
+                score -= 1
+            else:
+                # Empty corner: penalise whichever side has pieces next to it,
+                # since they're one move away from giving up the corner.
+                for nx, ny in self.get_corner_neighbours(cx, cy):
+                    nval = self.board[nx][ny]
+                    if nval == player:
+                        score -= 0.25
+                    elif nval == opponent:
+                        score += 0.25
+        return int(CORNER_CELL_BONUS * score)
+
+    def get_stable_cells_score_difference(self, player):
+        opponent = self.get_opponent(player)
+        return STABILITY_BONUS * (len(self.get_stable_cells(player))
+                                  - len(self.get_stable_cells(opponent)))
+
+    # Game-over reward. Magnitude dominates midgame terms by several orders of magnitude
+    # so a guaranteed win/loss outranks any positional consideration. The per-cell margin
+    # term breaks ties so a 64:0 sweep beats a 33:31 win.
+    def get_victory_score_difference(self, player):
+        winner = self.get_winner()
+        if winner == player:
+            bonus = VICTORY_BONUS
+        elif winner == self.get_opponent(player):
+            bonus = -VICTORY_BONUS
+        else:
+            return 0
+        return bonus + (VICTORY_BONUS / self.cells_count) * self.get_final_score_difference(player)
+
+    def get_board_heuristics(self, player):
+        if self.is_over():
+            return self.get_victory_score_difference(player)
+        return (self.get_mobility_score_difference(player)
+                + self.get_corner_cells_score_difference(player)
+                + self.get_stable_cells_score_difference(player))
+
+    # -------- stable cell detection --------
+
+    # Pieces that can never be flipped. Two contributing patterns:
+    #   1. An owned corner, plus any runs of the player's pieces extending outward
+    #      from it along the two adjacent edges (until an enemy/empty/other corner).
+    #   2. Any of the player's pieces lying on a fully-filled edge between corners.
+    # Returns a set of (x, y).
+    def get_stable_cells(self, player):
+        stable = set()
+
+        for cx, cy in self._corners:
+            if self.board[cx][cy] != player:
                 continue
+            stable.add((cx, cy))
+            for dx, dy in self.edge_directions:
+                stable.update(
+                    self.get_stable_cells_on_edges_in_direction_from_corner(player, cx, cy, dx, dy))
 
-            # Current move is worse than ones already found, skip it
-            if value < max_so_far:
-                continue
+        for cx, cy in self._corners:
+            for dx, dy in self.edge_directions:
+                stable.update(
+                    self.get_stable_cells_on_filled_edge(player, cx, cy, dx, dy))
 
-            max_so_far = max(value, max_so_far)
-            evaluations.append((move, value))
+        return stable
 
-        if len(valid_moves) == 0:
-            evaluations.append((self.pass_move, self.get_move_value(player, self.pass_move[0], self.pass_move[1],
-                                                                    search_depth - 1, -max_so_far)))
+    # Walk outward from corner (x, y) in direction (dx, dy) and collect the player's
+    # pieces until hitting another corner, an opponent/empty cell, or going off-board.
+    # (x, y) itself is not included.
+    def get_stable_cells_on_edges_in_direction_from_corner(self, player, x, y, dx, dy):
+        run = []
+        nx, ny = x + dx, y + dy
+        while (self.is_on_board(nx, ny)
+               and self.board[nx][ny] == player
+               and not self.is_on_corner(nx, ny)):
+            run.append((nx, ny))
+            nx += dx
+            ny += dy
+        return run
 
-        return evaluations
+    # If the edge starting at (x, y) in direction (dx, dy) is fully filled (no empties),
+    # return all of the player's pieces on it. Otherwise return nothing.
+    def get_stable_cells_on_filled_edge(self, player, x, y, dx, dy):
+        player_cells = []
+        nx, ny = x, y
+        while self.is_on_board(nx, ny):
+            cell = self.board[nx][ny]
+            if cell == self.empty:
+                return []
+            if cell == player:
+                player_cells.append((nx, ny))
+            nx += dx
+            ny += dy
+        return player_cells
 
-    # Get heuristic value associated with the move
-    def get_move_value(self, player, x, y, search_depth, max_value):
-        # Make a move and save flipped cells
-        cells_flipped_by_move = self.move(player, x, y)
+    # -------- search --------
 
-        # Check whether the search is over
-        if search_depth == 0 or self.is_over():
-            result = self.get_board_heuristics(player)
-            self.undo_move(player, x, y, cells_flipped_by_move)
-            return result
+    # Negamax with fail-soft alpha-beta pruning. Returns the value of the position
+    # from `player`'s perspective (so the caller does `value = -_negamax(opp, ...)`).
+    def _negamax(self, player, depth, alpha, beta):
+        if depth == 0 or self.is_over():
+            return self.get_board_heuristics(player)
 
-        # Return the opposite of the opponent's best move value
+        moves = self.get_valid_moves(player)
         opponent = self.get_opponent(player)
 
-        # Recursively call back to GetMoveEvaluations
-        move_evaluations = self.get_move_evaluations(opponent, search_depth, max_value)
+        # Forced pass: hand the turn to the opponent without changing the board.
+        if moves == [self.pass_move]:
+            return -self._negamax(opponent, depth - 1, -beta, -alpha)
 
-        max_found = int_min
+        best = INT_MIN
+        for x, y in moves:
+            flipped = self.move(player, x, y)
+            value = -self._negamax(opponent, depth - 1, -beta, -alpha)
+            self.undo_move(player, x, y, flipped)
 
-        # Find the best available move and use it to evaluate the next depth level
-        for move_value_pair in move_evaluations:
-            if move_value_pair[1] > max_found:
-                max_found = move_value_pair[1]
+            if value > best:
+                best = value
+            if best > alpha:
+                alpha = best
+            if alpha >= beta:
+                break  # fail-soft beta cutoff
+        return best
 
-        # Undo the move
-        self.undo_move(player, x, y, cells_flipped_by_move)
-
-        return -max_found
-
-    # Get the search depth depending on difficulty level and the game's current state
+    # Scale search depth with difficulty: deeper as the board fills up, and solve
+    # exhaustively once the remaining tree is small enough.
     def get_search_depth(self, difficulty):
-        # Search depth directly depends on the difficulty level
         search_depth = difficulty + 1
+        filled = self.score[0] + self.score[1]
+        empty = self.cells_count - filled
 
-        total_cells = self.cells_count
-        filled_cells = self.get_score(1) + self.get_score(2)
-        empty_cells = total_cells - filled_cells
-
-        # Tweaks for hard levels
         if difficulty >= 2:
-            # Search depth can be increased when most of the cells are filled
-            if empty_cells < filled_cells:
-                # Every 10% of filled cells after 50% increase the search depth by 1
-                search_depth += int(10 * (filled_cells / float(total_cells) - 0.5))
-
-            # It is possible to search to the end at some point
-            if search_depth <= empty_cells:
-                threshold = self.size
-                if difficulty > 4:
-                    threshold += difficulty
-                elif difficulty == 4 or difficulty == 3 or difficulty == 2:
-                    threshold += difficulty
-
-                # Search depth can be increased by the end of the game
-                if empty_cells <= threshold:
-                    search_depth = empty_cells + 1
-
+            # +1 ply per 10% of the board filled beyond 50%.
+            if empty < filled:
+                search_depth += int(10 * (filled / self.cells_count - 0.5))
+            # Solve to the end of the game once the remaining tree is shallow enough.
+            threshold = self.size + difficulty
+            if search_depth <= empty and empty <= threshold:
+                search_depth = empty + 1
         return search_depth
 
-    # Get the best possible move for the player according to game heuristics
+    # Pick the best move for the player using negamax. Ties broken uniformly at random.
     def get_best_move(self, player, difficulty):
-        # Calculate the optimal search depth for current state given the difficulty level
         search_depth = self.get_search_depth(difficulty)
+        moves = self.get_valid_moves(player)
+        opponent = self.get_opponent(player)
 
-        # Get all possible moves along with their values for the player
-        moves = self.get_move_evaluations(player, search_depth, int_max)
+        # Forced pass: nothing to choose; still evaluate the resulting position.
+        if moves == [self.pass_move]:
+            value = -self._negamax(opponent, search_depth - 1, INT_MIN, INT_MAX)
+            return self.pass_move, value
 
-        # If there are no possible moves, the player has to pass
-        if len(moves) == 0:
-            return (self.pass_move,
-                    self.get_move_value(player, self.pass_move[0], self.pass_move[1], search_depth, int_max))
-        # Only one move is possible, there's no need to search
-        elif len(moves) == 1:
-            return moves[0]
-        # Return the move with highest value for the player
-        else:
-            # The list of moves that are best
-            best_moves = []
+        # Full window at root so that equal-value ties can be detected exactly.
+        # Internal alpha-beta inside _negamax still prunes within each subtree.
+        best_value = INT_MIN
+        best_moves = []
+        for x, y in moves:
+            flipped = self.move(player, x, y)
+            value = -self._negamax(opponent, search_depth - 1, INT_MIN, INT_MAX)
+            self.undo_move(player, x, y, flipped)
 
-            # Value of the best moves
-            best_value = int_min
+            if value > best_value:
+                best_value = value
+                best_moves = [(x, y)]
+            elif value == best_value:
+                best_moves.append((x, y))
 
-            # Find the best moves among remaining candidates
-            for move in moves:
-                # Current move candidate is better than the previous one
-                if move[1] > best_value:
-                    # Update best move and best move value
-                    best_moves = [move[0]]
-                    best_value = move[1]
-                # Value of the current move is equal to the value of the best one yet
-                elif move[1] == best_value:
-                    # Add current move to the list of the best moves
-                    best_moves.append(move[0])
+        if DEBUG:
+            print("Value = {0}, depth = {1}".format(best_value, search_depth))
 
-            print("Value = " + str(best_value) + ", depth = " + str(search_depth))
-            # Randomly return any of the best moves
-            rand_best_move = randrange(len(best_moves))
-            return best_moves[rand_best_move], best_value
+        return best_moves[randrange(len(best_moves))], best_value

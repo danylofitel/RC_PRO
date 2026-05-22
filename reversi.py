@@ -8,7 +8,7 @@ __author__ = 'danylofitel'
 
 
 def get_reversi_model():
-    return ReversiGameModel(2)
+    return ReversiGameModel(difficulty=2)
 
 
 def get_reversi_controller():
