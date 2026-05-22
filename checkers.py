@@ -12,7 +12,7 @@ __author__ = 'vladvalt'
 ##The place to start checkers
 
 
-def checkers(game_bot):
+def checkers(game_bot, player_moves_first=True):
     #Reserve it for demo usage
     #total = len(sys.argv)
     #cmd_args = str(sys.argv)
@@ -22,6 +22,8 @@ def checkers(game_bot):
     root = Tk()
     model = CheckersGameModel()
     game_bot.model = model
+    # Player 1 (white) moves first; the bot takes whichever side the player isn't.
+    game_bot.player = 2 if player_moves_first else 1
     controller = CheckersBoardController(model=model, bot=game_bot)
     controller.game_mode = GAME_MODES["playerVSPro"]
     controller.bot_move_delay = 0.3
@@ -31,6 +33,9 @@ def checkers(game_bot):
     controller.fill_board()
     if controller.game_mode == GAME_MODES["proVSPro"]:
         controller.start_bot_play()
+    elif not player_moves_first:
+        # Bot is white (moves first) -- kick off its opening move before mainloop.
+        controller.perform_bot_move()
 
     root.mainloop()
 
@@ -54,4 +59,6 @@ def improve_skill(bot, number_of_games):
 
 bot = CheckersBot(None)
 #improve_skill(bot, 2)
-checkers(bot)
+# White moves first in Checkers. Set player_moves_first=False to play as Black
+# and let the bot play White.
+checkers(bot, player_moves_first=True)

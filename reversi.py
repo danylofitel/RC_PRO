@@ -11,16 +11,18 @@ def get_reversi_model():
     return ReversiGameModel(difficulty=2)
 
 
-def get_reversi_controller():
-    return ReversiBoardController(get_reversi_model(), GAME_MODES["playerVSPro"], True)
+def get_reversi_controller(player_moves_first):
+    return ReversiBoardController(get_reversi_model(), GAME_MODES["playerVSPro"], player_moves_first)
 
 
-def reversi():
+def reversi(player_moves_first=True):
     root = Tk()
-    controller = get_reversi_controller()
+    controller = get_reversi_controller(player_moves_first)
     app = BoardCommonUI(root, controller)
     controller.fill_board()
     root.mainloop()
 
 
-reversi()
+# Black moves first in Reversi. Set player_moves_first=False to play as White
+# and let the AI play Black.
+reversi(player_moves_first=True)

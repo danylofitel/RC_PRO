@@ -72,7 +72,9 @@ class CheckersBoardController(CommonBoardController):
                         if self.controller.should_log_the_game_on_board:
                             self.controller.write_to_console(txt_to_write)
 
-                    if self.controller.model.current_player == 2 and self.controller.model.should_continue_attack():
+                    # Chain attacks: keep moving while it's still the bot's turn.
+                    if self.controller.model.current_player == self.controller.bot.player \
+                            and self.controller.model.should_continue_attack():
                         self.controller.perform_bot_move()
 
         bot_move_performer = BotMovePerformer()
