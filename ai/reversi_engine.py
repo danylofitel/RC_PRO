@@ -17,6 +17,11 @@ VICTORY_BONUS = INT_MAX // 4
 # When True, get_best_move prints the chosen value and search depth.
 DEBUG = True
 
+# When True, use the full Edax-style iterative stability algorithm (detects all
+# stable cells including interior ones). When False, use the original edge-only
+# algorithm. Toggle to compare heuristic quality and performance.
+USE_EDAX_STABILITY = True
+
 
 # Reversi game engine. Board coordinates are (row, column), zero-indexed.
 class ReversiEngine(object):
@@ -290,10 +295,15 @@ class ReversiEngine(object):
         return int(CORNER_CELL_BONUS * score)
 
     def get_stable_cells_score_difference(self, player):
-        opponent = self.get_opponent(player)
-        return STABILITY_BONUS * (
-            len(self.get_stable_cells(player)) - len(self.get_stable_cells(opponent))
-        )
+        if USE_EDAX_STABILITY:
+            all_stable = self._get_all_stable_cells_edax()
+            player_count = sum(1 for x, y in all_stable if self.board[x][y] == player)
+            opponent_count = len(all_stable) - player_count
+        else:
+            opponent = self.get_opponent(player)
+            player_count = len(self.get_stable_cells(player))
+            opponent_count = len(self.get_stable_cells(opponent))
+        return STABILITY_BONUS * (player_count - opponent_count)
 
     # Game-over reward. Magnitude dominates midgame terms by several orders of magnitude
     # so a guaranteed win/loss outranks any positional consideration. The per-cell margin
@@ -378,6 +388,67 @@ class ReversiEngine(object):
             nx += dx
             ny += dy
         return player_cells
+
+    # -------- Edax-style stability --------
+
+    # Iterative flood-fill stability. Repeatedly scans all occupied cells and marks
+    # any that satisfy the 4-axis condition given the current stable set, until
+    # no new cells are found. Returns a set of (x, y) for both players combined.
+    #
+    # A full-board scan (not pure BFS from corners) is required because cells on a
+    # fully-occupied interior line are stable without having any stable neighbour,
+    # so they would never be reached by a corner-seeded BFS.
+    def _get_all_stable_cells_edax(self):
+        stable = set()
+        changed = True
+        while changed:
+            changed = False
+            for x in range(self.size):
+                for y in range(self.size):
+                    if (x, y) not in stable and self.board[x][y] != self.empty:
+                        if self._is_stable_edax(x, y, stable):
+                            stable.add((x, y))
+                            changed = True
+        return stable
+
+    def _is_stable_edax(self, x, y, stable):
+        return all(
+            self._is_axis_stable(x, y, dx, dy, stable)
+            for dx, dy in ((0, 1), (1, 0), (1, 1), (1, -1))
+        )
+
+    # A cell is stable along an axis if:
+    #   1. The full line through it (both directions to the board edge) has no empty
+    #      cells — so no new disc can ever be placed to create a bracket, or
+    #   2. Both immediate neighbours along the axis are either off-board (edge) or
+    #      already stable — inductively guaranteeing the half-lines are permanently
+    #      occupied and cannot anchor an opposing bracket.
+    def _is_axis_stable(self, x, y, dx, dy, stable):
+        # Full-line check: walk negative direction first.
+        nx, ny = x - dx, y - dy
+        while self.is_on_board(nx, ny):
+            if self.board[nx][ny] == self.empty:
+                break
+            nx -= dx
+            ny -= dy
+        else:
+            # Negative direction all filled; check positive direction.
+            nx, ny = x + dx, y + dy
+            while self.is_on_board(nx, ny):
+                if self.board[nx][ny] == self.empty:
+                    break
+                nx += dx
+                ny += dy
+            else:
+                return True  # Full line in both directions.
+
+        # Not a full line: both immediate neighbours must be anchored.
+        neg = (x - dx, y - dy)
+        pos = (x + dx, y + dy)
+        return (
+            (not self.is_on_board(*neg) or neg in stable)
+            and (not self.is_on_board(*pos) or pos in stable)
+        )
 
     # -------- search --------
 
