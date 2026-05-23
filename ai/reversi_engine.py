@@ -1,6 +1,6 @@
 __author__ = "danylofitel"
 
-from random import randrange
+from random import choice
 
 
 # Search bounds (treated as +/- infinity for negamax).
@@ -163,7 +163,7 @@ class ReversiEngine(object):
     # two real moves and then calling undo_last_move() undoes the earlier real move.
     def undo_last_move(self):
         if not self.moves_stack:
-            raise Exception("Moves stack is empty")
+            raise IndexError("Moves stack is empty")
         player, (x, y), flipped = self.moves_stack.pop()
         self.undo_move(player, x, y, flipped)
 
@@ -242,7 +242,7 @@ class ReversiEngine(object):
         return self._corners
 
     # On-board neighbours of (x, y) in all 8 directions.
-    def get_corner_neighbours(self, x, y):
+    def get_cell_neighbours(self, x, y):
         return [
             (x + dx, y + dy)
             for dx, dy in self.directions
@@ -280,7 +280,7 @@ class ReversiEngine(object):
             else:
                 # Empty corner: penalise whichever side has pieces next to it,
                 # since they're one move away from giving up the corner.
-                for nx, ny in self.get_corner_neighbours(cx, cy):
+                for nx, ny in self.get_cell_neighbours(cx, cy):
                     nval = self.board[nx][ny]
                     if nval == player:
                         score -= 0.25
@@ -306,7 +306,7 @@ class ReversiEngine(object):
         else:
             return 0
         return bonus + (
-            VICTORY_BONUS / self.cells_count
+            VICTORY_BONUS // self.cells_count
         ) * self.get_final_score_difference(player)
 
     def get_board_heuristics(self, player):
@@ -453,4 +453,4 @@ class ReversiEngine(object):
         if DEBUG:
             print("Value = {0}, depth = {1}".format(best_value, search_depth))
 
-        return best_moves[randrange(len(best_moves))], best_value
+        return choice(best_moves), best_value
