@@ -35,7 +35,7 @@ class ReversiEngine(object):
 
     def __init__(self, board_size):
         self.size = board_size
-        self.cells_count = board_size**2
+        self.cell_count = board_size**2
 
         self.board = [
             [self.empty for _ in range(board_size)] for _ in range(board_size)
@@ -66,7 +66,7 @@ class ReversiEngine(object):
         # Optional history of moves for callers that want undo without tracking
         # flipped_cells themselves. Populated only when move() is called with
         # push_stack=True; passes are not recorded.
-        self.moves_stack = []
+        self.move_stack = []
 
     def __repr__(self):
         header = "  " + " ".join(str(y) for y in range(self.size))
@@ -115,9 +115,9 @@ class ReversiEngine(object):
     def get_final_score_difference(self, player):
         opponent = self.get_opponent(player)
         if self.score[player - 1] == 0:
-            return -self.cells_count
+            return -self.cell_count
         if self.score[opponent - 1] == 0:
-            return self.cells_count
+            return self.cell_count
         return self.score[player - 1] - self.score[opponent - 1]
 
     # -------- move execution --------
@@ -136,7 +136,7 @@ class ReversiEngine(object):
             flipped.extend(self.flip_cells_in_direction(player, x, y, dx, dy))
 
         if push_stack:
-            self.moves_stack.append((player, (x, y), flipped))
+            self.move_stack.append((player, (x, y), flipped))
         return flipped
 
     def undo_move(self, player, x, y, flipped_cells, pop_stack=False):
@@ -156,15 +156,15 @@ class ReversiEngine(object):
             self.score[opponent - 1] += 1
 
         if pop_stack:
-            self.moves_stack.pop()
+            self.move_stack.pop()
 
     # Undo the most recent move() that was called with push_stack=True. Does not
     # account for passes (passes were never pushed), so passing the turn between
     # two real moves and then calling undo_last_move() undoes the earlier real move.
     def undo_last_move(self):
-        if not self.moves_stack:
+        if not self.move_stack:
             raise IndexError("Moves stack is empty")
-        player, (x, y), flipped = self.moves_stack.pop()
+        player, (x, y), flipped = self.move_stack.pop()
         self.undo_move(player, x, y, flipped)
 
     # Compute the best move via negamax, play it, and return ((x, y), flipped_cells).
@@ -230,11 +230,11 @@ class ReversiEngine(object):
     def is_on_board(self, x, y):
         return 0 <= x < self.size and 0 <= y < self.size
 
-    def is_on_edge(self, x, y):
+    def is_edge(self, x, y):
         m = self.size - 1
         return x == 0 or x == m or y == 0 or y == m
 
-    def is_on_corner(self, x, y):
+    def is_corner(self, x, y):
         m = self.size - 1
         return (x == 0 or x == m) and (y == 0 or y == m)
 
@@ -242,7 +242,7 @@ class ReversiEngine(object):
         return self._corners
 
     # On-board neighbours of (x, y) in all 8 directions.
-    def get_cell_neighbours(self, x, y):
+    def get_neighbours(self, x, y):
         return [
             (x + dx, y + dy)
             for dx, dy in self.directions
@@ -280,7 +280,7 @@ class ReversiEngine(object):
             else:
                 # Empty corner: penalise whichever side has pieces next to it,
                 # since they're one move away from giving up the corner.
-                for nx, ny in self.get_cell_neighbours(cx, cy):
+                for nx, ny in self.get_neighbours(cx, cy):
                     nval = self.board[nx][ny]
                     if nval == player:
                         score -= 0.25
@@ -306,7 +306,7 @@ class ReversiEngine(object):
         else:
             return 0
         return bonus + (
-            VICTORY_BONUS // self.cells_count
+            VICTORY_BONUS // self.cell_count
         ) * self.get_final_score_difference(player)
 
     def get_board_heuristics(self, player):
@@ -356,7 +356,7 @@ class ReversiEngine(object):
         while (
             self.is_on_board(nx, ny)
             and self.board[nx][ny] == player
-            and not self.is_on_corner(nx, ny)
+            and not self.is_corner(nx, ny)
         ):
             run.append((nx, ny))
             nx += dx
@@ -412,12 +412,12 @@ class ReversiEngine(object):
     def get_search_depth(self, difficulty):
         search_depth = difficulty + 1
         filled = self.score[0] + self.score[1]
-        empty = self.cells_count - filled
+        empty = self.cell_count - filled
 
         if difficulty >= 2:
             # +1 ply per 10% of the board filled beyond 50%.
             if empty < filled:
-                search_depth += int(10 * (filled / self.cells_count - 0.5))
+                search_depth += int(10 * (filled / self.cell_count - 0.5))
             # Solve to the end of the game once the remaining tree is shallow enough.
             threshold = self.size + difficulty
             if search_depth <= empty and empty <= threshold:
