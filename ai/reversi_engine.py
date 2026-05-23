@@ -387,6 +387,9 @@ class ReversiEngine(object):
         self._nodes_searched += 1
 
         if depth == 0 or self.is_over():
+            depth_from_root = self._search_depth - depth
+            if depth_from_root > self._depth_reached:
+                self._depth_reached = depth_from_root
             return self.get_board_heuristics(player)
 
         moves = self.get_valid_moves(player)
@@ -436,6 +439,8 @@ class ReversiEngine(object):
 
         self._nodes_searched = 0
         self._cutoffs = 0
+        self._search_depth = search_depth
+        self._depth_reached = 0
         t_start = perf_counter()
 
         # Forced pass: nothing to choose; still evaluate the resulting position.
@@ -462,8 +467,8 @@ class ReversiEngine(object):
             elapsed = perf_counter() - t_start
             nps = int(self._nodes_searched / elapsed) if elapsed > 0 else 0
             print(
-                "value={0} depth={1} nodes={2} cutoffs={3} time={4:.3f}s nps={5}".format(
-                    best_value, search_depth,
+                "value={0} depth_limit={1} depth_reached={2} nodes={3} cutoffs={4} time={5:.3f}s nps={6}".format(
+                    best_value, search_depth, self._depth_reached,
                     self._nodes_searched, self._cutoffs,
                     elapsed, nps,
                 )
