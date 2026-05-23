@@ -1,6 +1,7 @@
 __author__ = "danylofitel"
 
 from random import choice
+from time import perf_counter
 
 
 # Search bounds (treated as +/- infinity for negamax).
@@ -383,6 +384,8 @@ class ReversiEngine(object):
     # Negamax with fail-soft alpha-beta pruning. Returns the value of the position
     # from `player`'s perspective (so the caller does `value = -_negamax(opp, ...)`).
     def _negamax(self, player, depth, alpha, beta):
+        self._nodes_searched += 1
+
         if depth == 0 or self.is_over():
             return self.get_board_heuristics(player)
 
@@ -404,6 +407,7 @@ class ReversiEngine(object):
             if best > alpha:
                 alpha = best
             if alpha >= beta:
+                self._cutoffs += 1
                 break  # fail-soft beta cutoff
         return best
 
@@ -430,6 +434,10 @@ class ReversiEngine(object):
         moves = self.get_valid_moves(player)
         opponent = self.get_opponent(player)
 
+        self._nodes_searched = 0
+        self._cutoffs = 0
+        t_start = perf_counter()
+
         # Forced pass: nothing to choose; still evaluate the resulting position.
         if moves == [self.pass_move]:
             value = -self._negamax(opponent, search_depth - 1, INT_MIN, INT_MAX)
@@ -451,6 +459,14 @@ class ReversiEngine(object):
                 best_moves.append((x, y))
 
         if DEBUG:
-            print("Value = {0}, depth = {1}".format(best_value, search_depth))
+            elapsed = perf_counter() - t_start
+            nps = int(self._nodes_searched / elapsed) if elapsed > 0 else 0
+            print(
+                "value={0} depth={1} nodes={2} cutoffs={3} time={4:.3f}s nps={5}".format(
+                    best_value, search_depth,
+                    self._nodes_searched, self._cutoffs,
+                    elapsed, nps,
+                )
+            )
 
         return choice(best_moves), best_value
