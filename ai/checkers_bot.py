@@ -15,7 +15,7 @@ class CheckersBot:
 
     def perform_random_move(self):
         available_moves = self.find_available_moves(self.model)
-        if not available_moves is None and len(available_moves) > 0:
+        if available_moves is not None and len(available_moves) > 0:
             start_pos = random.choice(available_moves)
             move = (start_pos[0], random.choice(start_pos[1]))
             self.model.move(move[0][0], move[0][1], move[1][0], move[1][1])
@@ -37,7 +37,7 @@ class CheckersBot:
                 if self.model.is_figure_of_current_player(i, j):
                     if self.model.is_able_to_move(i, j):
                         moves = model.get_available_moves(i, j)
-                        if not moves is None and len(moves) > 0:
+                        if moves is not None and len(moves) > 0:
                             available_moves.append(
                                 ((i, j), model.get_available_moves(i, j))
                             )

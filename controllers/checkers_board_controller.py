@@ -62,7 +62,7 @@ class CheckersBoardController(CommonBoardController):
                 bot_move = self.controller.bot.move()
                 time.sleep(self.controller.bot_move_delay)
 
-                if not bot_move is None:
+                if bot_move is not None:
                     if self.controller.should_show_bot_play_on_board:
                         if self.controller.model.last_move_type == MOVE_TYPES["simple"]:
                             self.controller.simple_move(
@@ -125,7 +125,7 @@ class CheckersBoardController(CommonBoardController):
                 self.state = STATES["checker_selected"]
 
             elif self.state == STATES["checker_selected"]:
-                if not self.last_selected is None:
+                if self.last_selected is not None:
                     should_move_to_none_state = False
                     should_bot_move_after = True
                     available_moves = self.model.get_available_moves(

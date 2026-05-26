@@ -468,9 +468,13 @@ class ReversiEngine(object):
             nps = int(self._nodes_searched / elapsed) if elapsed > 0 else 0
             print(
                 "value={0} depth_limit={1} depth_reached={2} nodes={3} cutoffs={4} time={5:.3f}s nps={6}".format(
-                    best_value, search_depth, self._depth_reached,
-                    self._nodes_searched, self._cutoffs,
-                    elapsed, nps,
+                    best_value,
+                    search_depth,
+                    self._depth_reached,
+                    self._nodes_searched,
+                    self._cutoffs,
+                    elapsed,
+                    nps,
                 )
             )
 
