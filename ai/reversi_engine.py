@@ -310,6 +310,19 @@ class ReversiEngine(object):
             VICTORY_BONUS // self.cell_count
         ) * self.get_final_score_difference(player)
 
+    # The raw counts behind the midgame terms, as (player, opponent) pairs:
+    # legal moves (mobility), stable cells, and owned corners. Used for logging.
+    def _cell_counts(self, player, opponent):
+        player_moves = self.get_valid_moves(player)
+        opponent_moves = self.get_valid_moves(opponent)
+        mob_p = 0 if player_moves == [self.pass_move] else len(player_moves)
+        mob_o = 0 if opponent_moves == [self.pass_move] else len(opponent_moves)
+        stab_p = len(self.get_stable_cells(player))
+        stab_o = len(self.get_stable_cells(opponent))
+        corn_p = sum(self.board[cx][cy] == player for cx, cy in self._corners)
+        corn_o = sum(self.board[cx][cy] == opponent for cx, cy in self._corners)
+        return mob_p, mob_o, stab_p, stab_o, corn_p, corn_o
+
     def get_board_heuristics(self, player):
         if self.is_over():
             return self.get_victory_score_difference(player)
@@ -463,18 +476,18 @@ class ReversiEngine(object):
             elif value == best_value:
                 best_moves.append((x, y))
 
+        chosen = choice(best_moves)
+
         if DEBUG:
             elapsed = perf_counter() - t_start
             nps = int(self._nodes_searched / elapsed) if elapsed > 0 else 0
-            # Cell counts for the (restored) root position, shown as player/opponent.
-            player_moves = self.get_valid_moves(player)
-            opponent_moves = self.get_valid_moves(opponent)
-            mob_p = 0 if player_moves == [self.pass_move] else len(player_moves)
-            mob_o = 0 if opponent_moves == [self.pass_move] else len(opponent_moves)
-            stab_p = len(self.get_stable_cells(player))
-            stab_o = len(self.get_stable_cells(opponent))
-            corn_p = sum(self.board[cx][cy] == player for cx, cy in self._corners)
-            corn_o = sum(self.board[cx][cy] == opponent for cx, cy in self._corners)
+            # Counts for the position the chosen move creates (player/opponent).
+            cx, cy = chosen
+            flipped = self.move(player, cx, cy)
+            mob_p, mob_o, stab_p, stab_o, corn_p, corn_o = self._cell_counts(
+                player, opponent
+            )
+            self.undo_move(player, cx, cy, flipped)
             print(
                 "value={0:>14} | mob={1:>2}/{2:<2} stab={3:>2}/{4:<2} "
                 "corn={5}/{6} | dlim={7:>2} dreach={8:>2} | "
@@ -495,4 +508,4 @@ class ReversiEngine(object):
                 )
             )
 
-        return choice(best_moves), best_value
+        return chosen, best_value
