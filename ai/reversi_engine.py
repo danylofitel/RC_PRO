@@ -466,18 +466,26 @@ class ReversiEngine(object):
         if DEBUG:
             elapsed = perf_counter() - t_start
             nps = int(self._nodes_searched / elapsed) if elapsed > 0 else 0
-            # Heuristic terms for the (restored) root position, from player's view.
-            mobility = self.get_mobility_score_difference(player)
-            stability = self.get_stable_cells_score_difference(player)
-            corners = self.get_corner_cells_score_difference(player)
+            # Cell counts for the (restored) root position, shown as player/opponent.
+            player_moves = self.get_valid_moves(player)
+            opponent_moves = self.get_valid_moves(opponent)
+            mob_p = 0 if player_moves == [self.pass_move] else len(player_moves)
+            mob_o = 0 if opponent_moves == [self.pass_move] else len(opponent_moves)
+            stab_p = len(self.get_stable_cells(player))
+            stab_o = len(self.get_stable_cells(opponent))
+            corn_p = sum(self.board[cx][cy] == player for cx, cy in self._corners)
+            corn_o = sum(self.board[cx][cy] == opponent for cx, cy in self._corners)
             print(
-                "value={0:>14} | mob={1:>6} stab={2:>7} corn={3:>6} | "
-                "dlim={4:>2} dreach={5:>2} | nodes={6:>9} cutoffs={7:>9} | "
-                "time={8:>7.3f}s nps={9:>10}".format(
+                "value={0:>14} | mob={1:>2}/{2:<2} stab={3:>2}/{4:<2} "
+                "corn={5}/{6} | dlim={7:>2} dreach={8:>2} | "
+                "nodes={9:>9} cutoffs={10:>9} | time={11:>7.3f}s nps={12:>10}".format(
                     best_value,
-                    mobility,
-                    stability,
-                    corners,
+                    mob_p,
+                    mob_o,
+                    stab_p,
+                    stab_o,
+                    corn_p,
+                    corn_o,
                     search_depth,
                     self._depth_reached,
                     self._nodes_searched,
