@@ -466,9 +466,18 @@ class ReversiEngine(object):
         if DEBUG:
             elapsed = perf_counter() - t_start
             nps = int(self._nodes_searched / elapsed) if elapsed > 0 else 0
+            # Heuristic terms for the (restored) root position, from player's view.
+            mobility = self.get_mobility_score_difference(player)
+            stability = self.get_stable_cells_score_difference(player)
+            corners = self.get_corner_cells_score_difference(player)
             print(
-                "value={0} depth_limit={1} depth_reached={2} nodes={3} cutoffs={4} time={5:.3f}s nps={6}".format(
+                "value={0:>14} | mob={1:>6} stab={2:>7} corn={3:>6} | "
+                "dlim={4:>2} dreach={5:>2} | nodes={6:>9} cutoffs={7:>9} | "
+                "time={8:>7.3f}s nps={9:>10}".format(
                     best_value,
+                    mobility,
+                    stability,
+                    corners,
                     search_depth,
                     self._depth_reached,
                     self._nodes_searched,
