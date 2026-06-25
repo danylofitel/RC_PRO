@@ -34,6 +34,8 @@ class ReversiEngine(object):
     # Sentinel returned by get_valid_moves / accepted by move() when no legal move exists.
     pass_move = (-1, -1)
 
+    # -------- construction --------
+
     def __init__(self, board_size):
         self.size = board_size
         self.cell_count = board_size**2
@@ -70,7 +72,7 @@ class ReversiEngine(object):
         self.move_stack = []
 
         # Search statistics, (re)set at the start of each get_best_move call.
-        # Initialised here so _negamax/get_board_heuristics can also be called
+        # Initialised here so _negamax/_board_heuristics can also be called
         # standalone without raising AttributeError.
         self._search_depth = 0
         self._depth_reached = 0
@@ -86,6 +88,30 @@ class ReversiEngine(object):
             for x in range(self.size)
         ]
         return header + "\n" + "\n".join(rows) + "\n"
+
+    # -------- board geometry --------
+
+    def is_on_board(self, x, y):
+        return 0 <= x < self.size and 0 <= y < self.size
+
+    def is_edge(self, x, y):
+        m = self.size - 1
+        return x == 0 or x == m or y == 0 or y == m
+
+    def is_corner(self, x, y):
+        m = self.size - 1
+        return (x == 0 or x == m) and (y == 0 or y == m)
+
+    def get_corners(self):
+        return self._corners
+
+    # On-board neighbours of (x, y) in all 8 directions.
+    def get_neighbours(self, x, y):
+        return [
+            (x + dx, y + dy)
+            for dx, dy in self.directions
+            if self.is_on_board(x + dx, y + dy)
+        ]
 
     # -------- game state queries --------
 
@@ -119,15 +145,41 @@ class ReversiEngine(object):
     def get_score_difference(self, player):
         return self.score[player - 1] - self.score[self.get_opponent(player) - 1]
 
-    # Score difference assuming the game is over. Wipeouts are scored at +/- board size
-    # rather than the actual remaining count, since the trailing side has "lost everything".
-    def get_final_score_difference(self, player):
+    # -------- move generation / validation --------
+
+    def get_free_cells(self):
+        return list(self._free_cells)
+
+    def get_valid_moves(self, player):
+        moves = [
+            cell
+            for cell in self._free_cells
+            if self.move_is_valid(player, cell[0], cell[1])
+        ]
+        return moves if moves else [self.pass_move]
+
+    def move_is_valid(self, player, x, y):
+        if not self.is_on_board(x, y) or self.board[x][y] != self.empty:
+            return False
+        return any(
+            self._move_captures_direction(player, x, y, dx, dy)
+            for dx, dy in self.directions
+        )
+
+    # True if placing `player` at (x, y) captures opponent pieces in direction (dx, dy).
+    def _move_captures_direction(self, player, x, y, dx, dy):
         opponent = self.get_opponent(player)
-        if self.score[player - 1] == 0:
-            return -self.cell_count
-        if self.score[opponent - 1] == 0:
-            return self.cell_count
-        return self.score[player - 1] - self.score[opponent - 1]
+        nx, ny = x + dx, y + dy
+
+        # Must start by stepping onto an opponent cell.
+        if not self.is_on_board(nx, ny) or self.board[nx][ny] != opponent:
+            return False
+
+        # Walk through the opponent's run; the move captures iff it ends on our own piece.
+        while self.is_on_board(nx, ny) and self.board[nx][ny] == opponent:
+            nx += dx
+            ny += dy
+        return self.is_on_board(nx, ny) and self.board[nx][ny] == player
 
     # -------- move execution --------
 
@@ -142,10 +194,27 @@ class ReversiEngine(object):
 
         flipped = []
         for dx, dy in self.directions:
-            flipped.extend(self.flip_cells_in_direction(player, x, y, dx, dy))
+            flipped.extend(self._flip_cells_in_direction(player, x, y, dx, dy))
 
         if push_stack:
             self.move_stack.append((player, (x, y), flipped))
+        return flipped
+
+    # Flip opponent pieces in direction (dx, dy) and return the list of flipped coordinates.
+    def _flip_cells_in_direction(self, player, x, y, dx, dy):
+        if not self._move_captures_direction(player, x, y, dx, dy):
+            return []
+
+        opponent = self.get_opponent(player)
+        flipped = []
+        nx, ny = x + dx, y + dy
+        while self.is_on_board(nx, ny) and self.board[nx][ny] == opponent:
+            self.board[nx][ny] = player
+            self.score[player - 1] += 1
+            self.score[opponent - 1] -= 1
+            flipped.append((nx, ny))
+            nx += dx
+            ny += dy
         return flipped
 
     def undo_move(self, player, x, y, flipped_cells, pop_stack=False):
@@ -181,87 +250,19 @@ class ReversiEngine(object):
         (x, y), _ = self.get_best_move(player, difficulty)
         return (x, y), self.move(player, x, y)
 
-    # -------- move generation / validation --------
-
-    def get_free_cells(self):
-        return list(self._free_cells)
-
-    def get_valid_moves(self, player):
-        moves = [
-            cell
-            for cell in self._free_cells
-            if self.move_is_valid(player, cell[0], cell[1])
-        ]
-        return moves if moves else [self.pass_move]
-
-    def move_is_valid(self, player, x, y):
-        if not self.is_on_board(x, y) or self.board[x][y] != self.empty:
-            return False
-        return any(
-            self.move_captures_direction(player, x, y, dx, dy)
-            for dx, dy in self.directions
-        )
-
-    # True if placing `player` at (x, y) captures opponent pieces in direction (dx, dy).
-    def move_captures_direction(self, player, x, y, dx, dy):
-        opponent = self.get_opponent(player)
-        nx, ny = x + dx, y + dy
-
-        # Must start by stepping onto an opponent cell.
-        if not self.is_on_board(nx, ny) or self.board[nx][ny] != opponent:
-            return False
-
-        # Walk through the opponent's run; the move captures iff it ends on our own piece.
-        while self.is_on_board(nx, ny) and self.board[nx][ny] == opponent:
-            nx += dx
-            ny += dy
-        return self.is_on_board(nx, ny) and self.board[nx][ny] == player
-
-    # Flip opponent pieces in direction (dx, dy) and return the list of flipped coordinates.
-    def flip_cells_in_direction(self, player, x, y, dx, dy):
-        if not self.move_captures_direction(player, x, y, dx, dy):
-            return []
-
-        opponent = self.get_opponent(player)
-        flipped = []
-        nx, ny = x + dx, y + dy
-        while self.is_on_board(nx, ny) and self.board[nx][ny] == opponent:
-            self.board[nx][ny] = player
-            self.score[player - 1] += 1
-            self.score[opponent - 1] -= 1
-            flipped.append((nx, ny))
-            nx += dx
-            ny += dy
-        return flipped
-
-    # -------- board geometry --------
-
-    def is_on_board(self, x, y):
-        return 0 <= x < self.size and 0 <= y < self.size
-
-    def is_edge(self, x, y):
-        m = self.size - 1
-        return x == 0 or x == m or y == 0 or y == m
-
-    def is_corner(self, x, y):
-        m = self.size - 1
-        return (x == 0 or x == m) and (y == 0 or y == m)
-
-    def get_corners(self):
-        return self._corners
-
-    # On-board neighbours of (x, y) in all 8 directions.
-    def get_neighbours(self, x, y):
-        return [
-            (x + dx, y + dy)
-            for dx, dy in self.directions
-            if self.is_on_board(x + dx, y + dy)
-        ]
-
-    # -------- heuristic terms --------
+    # -------- heuristic evaluation --------
     # All midgame terms below are zero-sum: h(P, board) == -h(O, board).
     # Negamax depends on this; without it the AI sees inconsistent values at even
     # vs odd plies and plays incoherently.
+
+    def _board_heuristics(self, player):
+        if self.is_over():
+            return self._victory_score_difference(player)
+        return (
+            self._mobility_score_difference(player)
+            + self._corner_cells_score_difference(player)
+            + self._stable_cells_score_difference(player)
+        )
 
     # Number of legal placements for player. A forced pass counts as zero, so it
     # does not contribute to mobility.
@@ -269,13 +270,13 @@ class ReversiEngine(object):
         moves = self.get_valid_moves(player)
         return 0 if moves == [self.pass_move] else len(moves)
 
-    def get_mobility_score_difference(self, player):
+    def _mobility_score_difference(self, player):
         opponent = self.get_opponent(player)
         return MOBILITY_BONUS * (
             self._legal_move_count(player) - self._legal_move_count(opponent)
         )
 
-    def get_corner_cells_score_difference(self, player):
+    def _corner_cells_score_difference(self, player):
         opponent = self.get_opponent(player)
         score = 0.0
 
@@ -296,7 +297,7 @@ class ReversiEngine(object):
                         score += 0.25
         return int(CORNER_CELL_BONUS * score)
 
-    def get_stable_cells_score_difference(self, player):
+    def _stable_cells_score_difference(self, player):
         opponent = self.get_opponent(player)
         return STABILITY_BONUS * (
             len(self.get_stable_cells(player)) - len(self.get_stable_cells(opponent))
@@ -305,7 +306,7 @@ class ReversiEngine(object):
     # Game-over reward. Magnitude dominates midgame terms by several orders of magnitude
     # so a guaranteed win/loss outranks any positional consideration. The per-cell margin
     # term breaks ties so a 64:0 sweep beats a 33:31 win.
-    def get_victory_score_difference(self, player):
+    def _victory_score_difference(self, player):
         winner = self.get_winner()
         if winner == player:
             bonus = VICTORY_BONUS
@@ -315,7 +316,17 @@ class ReversiEngine(object):
             return 0
         return bonus + (
             VICTORY_BONUS // self.cell_count
-        ) * self.get_final_score_difference(player)
+        ) * self._final_score_difference(player)
+
+    # Score difference assuming the game is over. Wipeouts are scored at +/- board size
+    # rather than the actual remaining count, since the trailing side has "lost everything".
+    def _final_score_difference(self, player):
+        opponent = self.get_opponent(player)
+        if self.score[player - 1] == 0:
+            return -self.cell_count
+        if self.score[opponent - 1] == 0:
+            return self.cell_count
+        return self.score[player - 1] - self.score[opponent - 1]
 
     # The raw counts behind the midgame terms, as (player, opponent) pairs:
     # legal moves (mobility), stable cells, and owned corners. Used for logging.
@@ -327,15 +338,6 @@ class ReversiEngine(object):
         corn_p = sum(self.board[cx][cy] == player for cx, cy in self._corners)
         corn_o = sum(self.board[cx][cy] == opponent for cx, cy in self._corners)
         return mob_p, mob_o, stab_p, stab_o, corn_p, corn_o
-
-    def get_board_heuristics(self, player):
-        if self.is_over():
-            return self.get_victory_score_difference(player)
-        return (
-            self.get_mobility_score_difference(player)
-            + self.get_corner_cells_score_difference(player)
-            + self.get_stable_cells_score_difference(player)
-        )
 
     # -------- stable cell detection --------
 
@@ -355,21 +357,19 @@ class ReversiEngine(object):
                 # Runs extending from an owned corner along its adjacent edges.
                 if owns_corner:
                     stable.update(
-                        self.get_stable_cells_on_edges_in_direction_from_corner(
+                        self._stable_cells_on_edges_in_direction_from_corner(
                             player, cx, cy, dx, dy
                         )
                     )
                 # Pieces on a fully-filled edge anchored at this corner.
-                stable.update(
-                    self.get_stable_cells_on_filled_edge(player, cx, cy, dx, dy)
-                )
+                stable.update(self._stable_cells_on_filled_edge(player, cx, cy, dx, dy))
 
         return stable
 
     # Walk outward from corner (x, y) in direction (dx, dy) and collect the player's
     # pieces until hitting another corner, an opponent/empty cell, or going off-board.
     # (x, y) itself is not included.
-    def get_stable_cells_on_edges_in_direction_from_corner(self, player, x, y, dx, dy):
+    def _stable_cells_on_edges_in_direction_from_corner(self, player, x, y, dx, dy):
         run = []
         nx, ny = x + dx, y + dy
         while (
@@ -384,7 +384,7 @@ class ReversiEngine(object):
 
     # If the edge starting at (x, y) in direction (dx, dy) is fully filled (no empties),
     # return all of the player's pieces on it. Otherwise return nothing.
-    def get_stable_cells_on_filled_edge(self, player, x, y, dx, dy):
+    def _stable_cells_on_filled_edge(self, player, x, y, dx, dy):
         player_cells = []
         nx, ny = x, y
         while self.is_on_board(nx, ny):
@@ -399,59 +399,9 @@ class ReversiEngine(object):
 
     # -------- search --------
 
-    # Negamax with fail-soft alpha-beta pruning. Returns the value of the position
-    # from `player`'s perspective (so the caller does `value = -_negamax(opp, ...)`).
-    def _negamax(self, player, depth, alpha, beta):
-        self._nodes_searched += 1
-
-        if depth == 0 or self.is_over():
-            depth_from_root = self._search_depth - depth
-            if depth_from_root > self._depth_reached:
-                self._depth_reached = depth_from_root
-            return self.get_board_heuristics(player)
-
-        moves = self.get_valid_moves(player)
-        opponent = self.get_opponent(player)
-
-        # Forced pass: hand the turn to the opponent without changing the board.
-        if moves == [self.pass_move]:
-            return -self._negamax(opponent, depth - 1, -beta, -alpha)
-
-        best = INT_MIN
-        for x, y in moves:
-            flipped = self.move(player, x, y)
-            value = -self._negamax(opponent, depth - 1, -beta, -alpha)
-            self.undo_move(player, x, y, flipped)
-
-            if value > best:
-                best = value
-            if best > alpha:
-                alpha = best
-            if alpha >= beta:
-                self._cutoffs += 1
-                break  # fail-soft beta cutoff
-        return best
-
-    # Scale search depth with difficulty: deeper as the board fills up, and solve
-    # exhaustively once the remaining tree is small enough.
-    def get_search_depth(self, difficulty):
-        search_depth = difficulty + 1
-        filled = self.score[0] + self.score[1]
-        empty = self.cell_count - filled
-
-        if difficulty >= 2:
-            # +1 ply per 10% of the board filled beyond 50%.
-            if empty < filled:
-                search_depth += int(10 * (filled / self.cell_count - 0.5))
-            # Solve to the end of the game once the remaining tree is shallow enough.
-            threshold = self.size + difficulty
-            if search_depth <= empty and empty <= threshold:
-                search_depth = empty + 1
-        return search_depth
-
     # Pick the best move for the player using negamax. Ties broken uniformly at random.
     def get_best_move(self, player, difficulty):
-        search_depth = self.get_search_depth(difficulty)
+        search_depth = self._compute_search_depth(difficulty)
         moves = self.get_valid_moves(player)
         opponent = self.get_opponent(player)
 
@@ -514,3 +464,53 @@ class ReversiEngine(object):
             )
 
         return chosen, best_value
+
+    # Negamax with fail-soft alpha-beta pruning. Returns the value of the position
+    # from `player`'s perspective (so the caller does `value = -_negamax(opp, ...)`).
+    def _negamax(self, player, depth, alpha, beta):
+        self._nodes_searched += 1
+
+        if depth == 0 or self.is_over():
+            depth_from_root = self._search_depth - depth
+            if depth_from_root > self._depth_reached:
+                self._depth_reached = depth_from_root
+            return self._board_heuristics(player)
+
+        moves = self.get_valid_moves(player)
+        opponent = self.get_opponent(player)
+
+        # Forced pass: hand the turn to the opponent without changing the board.
+        if moves == [self.pass_move]:
+            return -self._negamax(opponent, depth - 1, -beta, -alpha)
+
+        best = INT_MIN
+        for x, y in moves:
+            flipped = self.move(player, x, y)
+            value = -self._negamax(opponent, depth - 1, -beta, -alpha)
+            self.undo_move(player, x, y, flipped)
+
+            if value > best:
+                best = value
+            if best > alpha:
+                alpha = best
+            if alpha >= beta:
+                self._cutoffs += 1
+                break  # fail-soft beta cutoff
+        return best
+
+    # Scale search depth with difficulty: deeper as the board fills up, and solve
+    # exhaustively once the remaining tree is small enough.
+    def _compute_search_depth(self, difficulty):
+        search_depth = difficulty + 1
+        filled = self.score[0] + self.score[1]
+        empty = self.cell_count - filled
+
+        if difficulty >= 2:
+            # +1 ply per 10% of the board filled beyond 50%.
+            if empty < filled:
+                search_depth += int(10 * (filled / self.cell_count - 0.5))
+            # Solve to the end of the game once the remaining tree is shallow enough.
+            threshold = self.size + difficulty
+            if search_depth <= empty and empty <= threshold:
+                search_depth = empty + 1
+        return search_depth
