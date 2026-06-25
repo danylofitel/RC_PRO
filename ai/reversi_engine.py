@@ -10,8 +10,8 @@ INT_MIN = -INT_MAX
 
 # Heuristic weights.
 MOBILITY_BONUS = 100
-CORNER_CELL_BONUS = 10_000  # 100 * MOBILITY_BONUS
-STABILITY_BONUS = 5_000  # CORNER_CELL_BONUS // 2
+CORNER_CELL_BONUS = 100 * MOBILITY_BONUS
+STABILITY_BONUS = CORNER_CELL_BONUS // 2
 VICTORY_BONUS = INT_MAX // 4
 
 # When True, get_best_move prints the chosen value and search depth.
@@ -68,6 +68,14 @@ class ReversiEngine(object):
         # flipped_cells themselves. Populated only when move() is called with
         # push_stack=True; passes are not recorded.
         self.move_stack = []
+
+        # Search statistics, (re)set at the start of each get_best_move call.
+        # Initialised here so _negamax/get_board_heuristics can also be called
+        # standalone without raising AttributeError.
+        self._search_depth = 0
+        self._depth_reached = 0
+        self._nodes_searched = 0
+        self._cutoffs = 0
 
     def __repr__(self):
         header = "  " + " ".join(str(y) for y in range(self.size))
@@ -255,18 +263,17 @@ class ReversiEngine(object):
     # Negamax depends on this; without it the AI sees inconsistent values at even
     # vs odd plies and plays incoherently.
 
+    # Number of legal placements for player. A forced pass counts as zero, so it
+    # does not contribute to mobility.
+    def _legal_move_count(self, player):
+        moves = self.get_valid_moves(player)
+        return 0 if moves == [self.pass_move] else len(moves)
+
     def get_mobility_score_difference(self, player):
         opponent = self.get_opponent(player)
-        player_moves = self.get_valid_moves(player)
-        opponent_moves = self.get_valid_moves(opponent)
-
-        # A forced pass does not contribute to mobility.
-        if player_moves == [self.pass_move]:
-            player_moves = []
-        if opponent_moves == [self.pass_move]:
-            opponent_moves = []
-
-        return MOBILITY_BONUS * (len(player_moves) - len(opponent_moves))
+        return MOBILITY_BONUS * (
+            self._legal_move_count(player) - self._legal_move_count(opponent)
+        )
 
     def get_corner_cells_score_difference(self, player):
         opponent = self.get_opponent(player)
@@ -313,10 +320,8 @@ class ReversiEngine(object):
     # The raw counts behind the midgame terms, as (player, opponent) pairs:
     # legal moves (mobility), stable cells, and owned corners. Used for logging.
     def _cell_counts(self, player, opponent):
-        player_moves = self.get_valid_moves(player)
-        opponent_moves = self.get_valid_moves(opponent)
-        mob_p = 0 if player_moves == [self.pass_move] else len(player_moves)
-        mob_o = 0 if opponent_moves == [self.pass_move] else len(opponent_moves)
+        mob_p = self._legal_move_count(player)
+        mob_o = self._legal_move_count(opponent)
         stab_p = len(self.get_stable_cells(player))
         stab_o = len(self.get_stable_cells(opponent))
         corn_p = sum(self.board[cx][cy] == player for cx, cy in self._corners)
@@ -343,18 +348,18 @@ class ReversiEngine(object):
         stable = set()
 
         for cx, cy in self._corners:
-            if self.board[cx][cy] != player:
-                continue
-            stable.add((cx, cy))
+            owns_corner = self.board[cx][cy] == player
+            if owns_corner:
+                stable.add((cx, cy))
             for dx, dy in self.edge_directions:
-                stable.update(
-                    self.get_stable_cells_on_edges_in_direction_from_corner(
-                        player, cx, cy, dx, dy
+                # Runs extending from an owned corner along its adjacent edges.
+                if owns_corner:
+                    stable.update(
+                        self.get_stable_cells_on_edges_in_direction_from_corner(
+                            player, cx, cy, dx, dy
+                        )
                     )
-                )
-
-        for cx, cy in self._corners:
-            for dx, dy in self.edge_directions:
+                # Pieces on a fully-filled edge anchored at this corner.
                 stable.update(
                     self.get_stable_cells_on_filled_edge(player, cx, cy, dx, dy)
                 )
